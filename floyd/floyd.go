@@ -1,6 +1,7 @@
 package floyd
 
 import (
+	"container/heap"
 	"math"
 
 	"github.com/jursonmo/pathroute/graph"
@@ -14,11 +15,12 @@ const (
 )
 
 // PairResult holds shortest distance and up to MaxShortestPaths paths for one (From, To).
+// Paths are sorted by total distance (1st, 2nd, ... shortest); distances may differ.
 type PairResult struct {
 	From     string     `json:"from"`
 	To       string     `json:"to"`
-	Distance int        `json:"distance"` // Inf or -1 for unreachable
-	Paths    [][]string `json:"paths"`    // at most MaxShortestPaths
+	Distance int        `json:"distance"` // 1st shortest distance, or -1 if unreachable
+	Paths    []PathDist `json:"paths"`    // at most MaxShortestPaths, each with its own distance
 	// ViaNeighborPaths: paths S -> N -> ... -> D that do not contain S (except start); at most MaxViaNeighborPaths
 	ViaNeighborPaths []PathDist `json:"via_neighbor_paths,omitempty"`
 }
@@ -103,10 +105,14 @@ func RunFloyd(g *graph.Graph) *AllPairsResult {
 				Distance: dist[i][j],
 				Paths:    nil,
 			}
-			if dist[i][j] == Inf {
+			if dist[i][j] != Inf {
+				pr.Paths = KShortestSimplePaths(g, i, j, MaxShortestPaths)
+				if len(pr.Paths) > 0 {
+					pr.Distance = pr.Paths[0].Distance
+				}
+			}
+			if pr.Distance == Inf {
 				pr.Distance = -1
-			} else {
-				pr.Paths = enumeratePaths(g, dist, pred, i, j, MaxShortestPaths)
 			}
 			results = append(results, pr)
 		}
@@ -170,6 +176,76 @@ func pathKey(path []string) string {
 		s += p
 	}
 	return s
+}
+
+// pathState is a (distance, path) for the k-shortest heap. Path is node indices.
+type pathState struct {
+	dist int
+	path []int
+}
+
+// pathHeap is a min-heap by distance.
+type pathHeap []pathState
+
+func (h pathHeap) Len() int           { return len(h) }
+func (h pathHeap) Less(i, j int) bool { return h[i].dist < h[j].dist }
+func (h pathHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *pathHeap) Push(x any)        { *h = append(*h, x.(pathState)) }
+func (h *pathHeap) Pop() any {
+	old := *h
+	n := len(old)
+	*h = old[0 : n-1]
+	return old[n-1]
+}
+
+func pathContains(path []int, x int) bool {
+	for _, v := range path {
+		if v == x {
+			return true
+		}
+	}
+	return false
+}
+
+// KShortestSimplePaths returns up to k simple paths from fromIdx to toIdx, sorted by total distance.
+// Paths may have different distances (1st shortest, 2nd shortest, ...).
+func KShortestSimplePaths(g *graph.Graph, fromIdx, toIdx int, k int) []PathDist {
+	if fromIdx == toIdx {
+		return []PathDist{{Path: []string{g.Name(fromIdx)}, Distance: 0}}
+	}
+	h := &pathHeap{}
+	heap.Init(h)
+	heap.Push(h, pathState{0, []int{fromIdx}})
+	var results []PathDist
+	seen := make(map[string]bool)
+	for h.Len() > 0 && len(results) < k {
+		s := heap.Pop(h).(pathState)
+		last := s.path[len(s.path)-1]
+		if last == toIdx {
+			names := make([]string, len(s.path))
+			for i, idx := range s.path {
+				names[i] = g.Name(idx)
+			}
+			key := pathKey(names)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			results = append(results, PathDist{Path: names, Distance: s.dist})
+			continue
+		}
+		for _, nb := range g.Neighbors(last) {
+			if pathContains(s.path, nb) {
+				continue
+			}
+			w := g.Weight(last, nb)
+			newPath := make([]int, len(s.path)+1)
+			copy(newPath, s.path)
+			newPath[len(newPath)-1] = nb
+			heap.Push(h, pathState{s.dist + w, newPath})
+		}
+	}
+	return results
 }
 
 // FillViaNeighborPaths computes for each pair (S,D) up to MaxViaNeighborPaths paths of the form

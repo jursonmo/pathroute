@@ -4,7 +4,7 @@
     { "from": "A", "to": "B", "weight": 50 },
     { "from": "B", "to": "A", "weight": 80 },
     { "from": "A", "to": "C", "weight": 10 },
-    { "from": "A", "to": "E", "weight": 10 },
+    { "from": "A", "to": "E", "weight": 15 },
     { "from": "B", "to": "C", "weight": 20 },
     { "from": "C", "to": "D", "weight": 10 },
     { "from": "E", "to": "D", "weight": 10 },

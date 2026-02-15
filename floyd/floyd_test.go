@@ -30,13 +30,16 @@ func TestFloyd_ThreeNodes(t *testing.T) {
 	if ba == nil || ba.Distance != 80 {
 		t.Fatalf("B->A: got %v", ba)
 	}
-	// A->C: direct 100 or A->B->C = 70
+	// A->C: 1st shortest A->B->C = 70, 2nd A->C = 100
 	ac := findResult(r, "A", "C")
 	if ac == nil || ac.Distance != 70 {
-		t.Fatalf("A->C: expected 70, got %v", ac)
+		t.Fatalf("A->C: expected first shortest 70, got %v", ac)
 	}
-	if len(ac.Paths) != 1 || len(ac.Paths[0]) != 3 {
-		t.Errorf("A->C paths: %v", ac.Paths)
+	if len(ac.Paths) < 1 || ac.Paths[0].Distance != 70 || len(ac.Paths[0].Path) != 3 {
+		t.Errorf("A->C first path should be [A,B,C] 70: %v", ac.Paths)
+	}
+	if len(ac.Paths) < 2 || ac.Paths[1].Distance != 100 {
+		t.Errorf("A->C second path should be [A,C] 100: %v", ac.Paths)
 	}
 }
 

@@ -63,11 +63,11 @@ func main() {
 			fmt.Printf("%s -> %s: no path\n", pr.From, pr.To)
 			continue
 		}
-		fmt.Printf("%s -> %s, distance: %d", pr.From, pr.To, pr.Distance)
+		fmt.Printf("%s -> %s", pr.From, pr.To)
 		if len(pr.Paths) > 0 {
-			fmt.Printf(", paths(%d):\n", len(pr.Paths))
+			fmt.Printf(", shortest distance: %d, paths (top 4, got %d):\n", pr.Paths[0].Distance, len(pr.Paths))
 			for _, p := range pr.Paths {
-				fmt.Printf("    %s\n", formatPathWithWeights(g, p, pr.Distance))
+				fmt.Printf("    %s\n", formatPathWithWeights(g, p.Path, p.Distance))
 			}
 		} else {
 			fmt.Println()
