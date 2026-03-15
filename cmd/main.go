@@ -97,3 +97,108 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Results written to %s\n", *outPath)
 	}
 }
+
+/*
+//运行结果：
+go run cmd/main.go
+
+A -> B, shortest distance: 50, paths (top 4, got 1):
+    [A-50-> B] sum: 50
+  via-neighbor paths(1):
+    [A-50-> B] sum: 50
+A -> C, shortest distance: 10, paths (top 4, got 2):
+    [A-10-> C] sum: 10
+    [A-50-> B-20-> C] sum: 70
+  via-neighbor paths(2):
+    [A-10-> C] sum: 10
+    [A-50-> B-20-> C] sum: 70
+A -> D, shortest distance: 20, paths (top 4, got 4):
+    [A-10-> C-10-> D] sum: 20
+    [A-15-> E-10-> D] sum: 25
+    [A-50-> B-15-> D] sum: 65
+    [A-50-> B-20-> C-10-> D] sum: 80
+  via-neighbor paths(3):
+    [A-10-> C-10-> D] sum: 20
+    [A-15-> E-10-> D] sum: 25
+    [A-50-> B-15-> D] sum: 65
+A -> E, shortest distance: 15, paths (top 4, got 1):
+    [A-15-> E] sum: 15
+  via-neighbor paths(1):
+    [A-15-> E] sum: 15
+A -> F, shortest distance: 30, paths (top 4, got 4):
+    [A-10-> C-10-> D-10-> F] sum: 30
+    [A-15-> E-10-> D-10-> F] sum: 35
+    [A-50-> B-15-> D-10-> F] sum: 75
+    [A-50-> B-20-> C-10-> D-10-> F] sum: 90
+  via-neighbor paths(3):
+    [A-10-> C-10-> D-10-> F] sum: 30
+    [A-15-> E-10-> D-10-> F] sum: 35
+    [A-50-> B-15-> D-10-> F] sum: 75
+B -> A, shortest distance: 80, paths (top 4, got 1):
+    [B-80-> A] sum: 80
+  via-neighbor paths(1):
+    [B-80-> A] sum: 80
+B -> C, shortest distance: 20, paths (top 4, got 2):
+    [B-20-> C] sum: 20
+    [B-80-> A-10-> C] sum: 90
+  via-neighbor paths(2):
+    [B-20-> C] sum: 20
+    [B-80-> A-10-> C] sum: 90
+B -> D, shortest distance: 15, paths (top 4, got 4):
+    [B-15-> D] sum: 15
+    [B-20-> C-10-> D] sum: 30
+    [B-80-> A-10-> C-10-> D] sum: 100
+    [B-80-> A-15-> E-10-> D] sum: 105
+  via-neighbor paths(3):
+    [B-15-> D] sum: 15
+    [B-20-> C-10-> D] sum: 30
+    [B-80-> A-10-> C-10-> D] sum: 100
+B -> E, shortest distance: 95, paths (top 4, got 1):
+    [B-80-> A-15-> E] sum: 95
+  via-neighbor paths(1):
+    [B-80-> A-15-> E] sum: 95
+B -> F, shortest distance: 25, paths (top 4, got 4):
+    [B-15-> D-10-> F] sum: 25
+    [B-20-> C-10-> D-10-> F] sum: 40
+    [B-80-> A-10-> C-10-> D-10-> F] sum: 110
+    [B-80-> A-15-> E-10-> D-10-> F] sum: 115
+  via-neighbor paths(3):
+    [B-15-> D-10-> F] sum: 25
+    [B-20-> C-10-> D-10-> F] sum: 40
+    [B-80-> A-10-> C-10-> D-10-> F] sum: 110
+C -> A: no path
+C -> B: no path
+C -> D, shortest distance: 10, paths (top 4, got 1):
+    [C-10-> D] sum: 10
+  via-neighbor paths(1):
+    [C-10-> D] sum: 10
+C -> E: no path
+C -> F, shortest distance: 20, paths (top 4, got 1):
+    [C-10-> D-10-> F] sum: 20
+  via-neighbor paths(1):
+    [C-10-> D-10-> F] sum: 20
+D -> A: no path
+D -> B: no path
+D -> C: no path
+D -> E: no path
+D -> F, shortest distance: 10, paths (top 4, got 1):
+    [D-10-> F] sum: 10
+  via-neighbor paths(1):
+    [D-10-> F] sum: 10
+E -> A: no path
+E -> B: no path
+E -> C: no path
+E -> D, shortest distance: 10, paths (top 4, got 1):
+    [E-10-> D] sum: 10
+  via-neighbor paths(1):
+    [E-10-> D] sum: 10
+E -> F, shortest distance: 20, paths (top 4, got 1):
+    [E-10-> D-10-> F] sum: 20
+  via-neighbor paths(1):
+    [E-10-> D-10-> F] sum: 20
+F -> A: no path
+F -> B: no path
+F -> C: no path
+F -> D: no path
+F -> E: no path
+*/
