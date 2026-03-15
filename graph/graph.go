@@ -19,9 +19,24 @@ type Edge struct {
 }
 
 // GraphJSON is the root structure for loading graph from JSON.
+// Nodes are always []string for the algorithm. NewFromJSON accepts files where
+// "nodes" is either ["A","B",...] or [{"id":"A","x":0,"y":0},...].
 type GraphJSON struct {
 	Nodes []string `json:"nodes"`
 	Edges []Edge   `json:"edges"`
+}
+
+// nodeObject is used when parsing "nodes" as array of objects (id, optional x, y).
+type nodeObject struct {
+	ID string  `json:"id"`
+	X  float64 `json:"x,omitempty"`
+	Y  float64 `json:"y,omitempty"`
+}
+
+// rawGraphFile is used to parse the JSON file with flexible nodes format.
+type rawGraphFile struct {
+	Nodes json.RawMessage `json:"nodes"`
+	Edges []Edge          `json:"edges"`
 }
 
 // Graph holds nodes and directed edges with weights.
@@ -34,16 +49,42 @@ type Graph struct {
 
 // NewFromJSON loads a graph from a JSON file. Weights must be in [MinWeight, MaxWeight].
 // If nodes is empty, nodes are inferred from edges.
+// The "nodes" field may be either ["A","B",...] or [{"id":"A","x":0,"y":0},...]; x,y are ignored.
 func NewFromJSON(path string) (*Graph, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
-	var gj GraphJSON
-	if err := json.Unmarshal(data, &gj); err != nil {
+	var raw rawGraphFile
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
-	return NewFromStruct(&gj)
+	nodeIDs, err := parseNodeIDs(raw.Nodes)
+	if err != nil {
+		return nil, err
+	}
+	gj := &GraphJSON{Nodes: nodeIDs, Edges: raw.Edges}
+	return NewFromStruct(gj)
+}
+
+// parseNodeIDs interprets raw (JSON array) as either []string or []nodeObject and returns node ids in order.
+func parseNodeIDs(raw json.RawMessage) ([]string, error) {
+	if len(raw) == 0 {
+		return nil, nil
+	}
+	var ids []string
+	if err := json.Unmarshal(raw, &ids); err == nil {
+		return ids, nil
+	}
+	var objs []nodeObject
+	if err := json.Unmarshal(raw, &objs); err != nil {
+		return nil, err
+	}
+	ids = make([]string, 0, len(objs))
+	for _, o := range objs {
+		ids = append(ids, o.ID)
+	}
+	return ids, nil
 }
 
 // NewFromStruct builds a Graph from GraphJSON. Validates weights in [1, 1000].
