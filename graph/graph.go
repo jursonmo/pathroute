@@ -16,6 +16,9 @@ type Edge struct {
 	From   string `json:"from"`
 	To     string `json:"to"`
 	Weight int    `json:"weight"`
+	Type   int    `json:"type"`
+	Status int    `json:"status"` // 0: unknown, 1: normal, 2: blocked
+	Des    string `json:"des"`    // description
 }
 
 // GraphJSON is the root structure for loading graph from JSON.
@@ -28,9 +31,10 @@ type GraphJSON struct {
 
 // nodeObject is used when parsing "nodes" as array of objects (id, optional x, y).
 type nodeObject struct {
-	ID string  `json:"id"`
-	X  float64 `json:"x"`
-	Y  float64 `json:"y"`
+	ID  string  `json:"id"`
+	X   float64 `json:"x"`
+	Y   float64 `json:"y"`
+	Des string  `json:"des"` // description
 }
 
 // rawGraphFile is used to parse the JSON file with flexible nodes format.
