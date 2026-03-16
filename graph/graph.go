@@ -29,8 +29,8 @@ type GraphJSON struct {
 // nodeObject is used when parsing "nodes" as array of objects (id, optional x, y).
 type nodeObject struct {
 	ID string  `json:"id"`
-	X  float64 `json:"x,omitempty"`
-	Y  float64 `json:"y,omitempty"`
+	X  float64 `json:"x"`
+	Y  float64 `json:"y"`
 }
 
 // rawGraphFile is used to parse the JSON file with flexible nodes format.
