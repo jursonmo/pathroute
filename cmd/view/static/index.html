@@ -7,7 +7,21 @@
   <script src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
   <style>
     body { margin: 0; font-family: system-ui, sans-serif; background: #1a1a2e; color: #eee; }
-    #graph { width: 100vw; height: 100vh; background: #1a1a2e; }
+    #app { display: flex; height: 100vh; width: 100vw; }
+    #sidebar { width: 320px; background: #0f1224; border-right: 1px solid #0f3460; padding: 14px; box-sizing: border-box; overflow: auto; }
+    #graph { flex: 1; height: 100vh; background: #1a1a2e; }
+    h2 { margin: 0 0 12px 0; font-size: 16px; color: #e94560; }
+    .section { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(15,52,96,0.6); }
+    .field { margin-top: 10px; }
+    .field label { display: block; color: #aaa; font-size: 12px; margin-bottom: 4px; }
+    .field input { width: 100%; box-sizing: border-box; padding: 8px; background: #1a1a2e; border: 1px solid #0f3460; color: #eee; border-radius: 4px; }
+    .row { display: flex; gap: 10px; }
+    .row .field { flex: 1; }
+    .btn { margin-top: 12px; width: 100%; padding: 10px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: #e94560; color: #fff; }
+    .btn-secondary { background: #0f3460; color: #eee; }
+    .hint { margin-top: 10px; color: #aaa; font-size: 12px; line-height: 1.4; }
+    .status { margin-top: 10px; font-size: 12px; color: #eee; background: rgba(15,52,96,0.35); border: 1px solid rgba(15,52,96,0.7); padding: 8px; border-radius: 6px; }
     #detail-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
     #detail-overlay.show { display: flex; }
     #detail-modal { background: #16213e; border-radius: 8px; padding: 20px; min-width: 320px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
@@ -22,7 +36,61 @@
   </style>
 </head>
 <body>
-  <div id="graph"></div>
+  <div id="app">
+    <div id="sidebar">
+      <h2>管理区</h2>
+
+      <div class="section">
+        <div style="font-size: 13px; color: #eee; margin-bottom: 6px;">添加节点</div>
+        <div class="field">
+          <label>节点 ID（必填）</label>
+          <input id="add-node-id" type="text" placeholder="例如: G" />
+        </div>
+        <div class="field">
+          <label>描述 (des)</label>
+          <input id="add-node-des" type="text" placeholder="可选" />
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>类型 (type)</label>
+            <input id="add-node-type" type="number" placeholder="可选" />
+          </div>
+          <div class="field">
+            <label>状态 (status)</label>
+            <input id="add-node-status" type="number" placeholder="可选" />
+          </div>
+        </div>
+        <button class="btn btn-primary" id="btn-add-node" type="button">添加节点</button>
+        <div class="hint">新增节点会放在当前视图中心附近，可拖动后自动保存位置。</div>
+      </div>
+
+      <div class="section">
+        <div style="font-size: 13px; color: #eee; margin-bottom: 6px;">添加边（像画图软件那样）</div>
+        <button class="btn btn-secondary" id="btn-edge-mode" type="button">进入“添加边模式”</button>
+        <div class="status" id="edge-mode-status">未开启添加边模式</div>
+        <div class="field">
+          <label>费用 (cost)</label>
+          <input id="add-edge-cost" type="number" min="1" max="1000" value="1" />
+        </div>
+        <div class="field">
+          <label>描述 (des)</label>
+          <input id="add-edge-des" type="text" placeholder="可选" />
+        </div>
+        <div class="row">
+          <div class="field">
+            <label>类型 (type)</label>
+            <input id="add-edge-type" type="number" placeholder="可选" />
+          </div>
+          <div class="field">
+            <label>状态 (status)</label>
+            <input id="add-edge-status" type="number" placeholder="可选" />
+          </div>
+        </div>
+        <div class="hint">开启模式后：先点击起点节点，再点击终点节点，即可创建有向边。</div>
+      </div>
+    </div>
+    <div id="graph"></div>
+  </div>
   <div id="detail-overlay">
     <div id="detail-modal">
       <h3 id="detail-title">详情</h3>

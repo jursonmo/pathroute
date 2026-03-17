@@ -9,6 +9,8 @@
   let network = null;
   let edgeClickTimeout = null;
   let editContext = null; // { type: 'node', id } | { type: 'edge', from, to }
+  let addEdgeMode = false;
+  let addEdgeFrom = null;
 
   const options = {
     nodes: {
@@ -31,6 +33,69 @@
     return from + '->' + to;
   }
 
+  function parseEdgeId(id) {
+    const i = id.indexOf('->');
+    if (i === -1) return null;
+    return { from: id.slice(0, i), to: id.slice(i + 2) };
+  }
+
+  function nodeIdOf(n) {
+    if (typeof n === 'string') return n;
+    if (n == null) return '';
+    return n.id != null ? n.id : n.ID;
+  }
+
+  function nodePosOf(n) {
+    if (typeof n !== 'object' || n == null) return { x: undefined, y: undefined };
+    const x = n.x != null ? n.x : n.X;
+    const y = n.y != null ? n.y : n.Y;
+    return { x, y };
+  }
+
+  function edgeFromToCost(e) {
+    const from = e.from != null ? e.from : e.From;
+    const to = e.to != null ? e.to : e.To;
+    const cost = e.cost != null ? e.cost : e.Cost;
+    return { from, to, cost };
+  }
+
+  function isBidi(from, to) {
+    return fullEdges.some(function (e) {
+      const ftc = edgeFromToCost(e);
+      return ftc.from === to && ftc.to === from;
+    });
+  }
+
+  function edgeSmoothFor(from, to) {
+    if (!isBidi(from, to)) return undefined;
+    const id = edgeId(from, to);
+    const revId = edgeId(to, from);
+    return id < revId ? false : { type: 'curvedCW', roundness: 0.4 };
+  }
+
+  function updateBidiStylesForPair(a, b) {
+    const id1 = edgeId(a, b);
+    const id2 = edgeId(b, a);
+    const e1 = edges.get(id1);
+    const e2 = edges.get(id2);
+    if (e1) edges.update({ id: id1, smooth: edgeSmoothFor(a, b) });
+    if (e2) edges.update({ id: id2, smooth: edgeSmoothFor(b, a) });
+  }
+
+  function setEdgeModeStatus() {
+    const el = document.getElementById('edge-mode-status');
+    if (!el) return;
+    if (!addEdgeMode) {
+      el.textContent = '未开启添加边模式';
+      return;
+    }
+    if (!addEdgeFrom) {
+      el.textContent = '添加边模式已开启：请点击起点节点';
+      return;
+    }
+    el.textContent = '已选择起点：' + addEdgeFrom + '，请点击终点节点';
+  }
+
   function loadAndRender() {
     fetch('/graph')
       .then((r) => r.json())
@@ -43,23 +108,26 @@
         // 不使用 x,y，让 vis 自动排布，保证一定能看到
         function rand() { return (Math.random() - 0.5) * 400; }
         const vsNodes = nodeList.map((n) => {
-          const id = typeof n === 'string' ? n : n.id;
-          const x = typeof n === 'object' ? n.x : undefined;
-          const y = typeof n === 'object' ? n.y : undefined;
+          const id = nodeIdOf(n);
+          const pos = nodePosOf(n);
+          const x = pos.x;
+          const y = pos.y;
           const hasPos = x != null && y != null;
           const node = { id, label: id, x: hasPos ? x : rand(), y: hasPos ? y : rand() };
           return node;
         });
         var edgeIds = {};
         edgeList.forEach(function (e) {
-          var from = e.from != null ? e.from : e.From;
-          var to = e.to != null ? e.to : e.To;
+          var ftc = edgeFromToCost(e);
+          var from = ftc.from;
+          var to = ftc.to;
           edgeIds[edgeId(from, to)] = true;
         });
         const vsEdges = edgeList.map((e) => {
-          const from = e.from != null ? e.from : e.From;
-          const to = e.to != null ? e.to : e.To;
-          const w = e.cost != null ? e.cost : e.Cost;
+          const ftc = edgeFromToCost(e);
+          const from = ftc.from;
+          const to = ftc.to;
+          const w = ftc.cost;
           const id = edgeId(from, to);
           const revId = edgeId(to, from);
           const isBidi = edgeIds[revId];
@@ -70,19 +138,13 @@
           return edge;
         });
 
-        // 边 id 解析为 from, to（与 edgeId(from,to) 一致）
-        function parseEdgeId(id) {
-          const i = id.indexOf('->');
-          if (i === -1) return null;
-          return { from: id.slice(0, i), to: id.slice(i + 2) };
-        }
-
         nodes.clear();
         edges.clear();
         nodes.add(vsNodes);
         edges.add(vsEdges);
 
         network = new vis.Network(container, { nodes, edges }, options);
+        setEdgeModeStatus();
 
         // 拖动结束时，把新的坐标保存回后端（更新 data/graph.json）
         network.on('dragEnd', function (params) {
@@ -97,8 +159,50 @@
           }).catch((e) => console.error('save-position failed', e));
         });
 
-        // 单击边：延迟弹出费用框，若随后发生双击则取消（双击会打开详情弹窗）
+        // 点击：在添加边模式下优先处理节点点击；否则保持单击边改费用逻辑
         network.on('click', function (params) {
+          if (addEdgeMode && params.nodes.length === 1) {
+            const nid = params.nodes[0];
+            if (!addEdgeFrom) {
+              addEdgeFrom = nid;
+              setEdgeModeStatus();
+              return;
+            }
+            const from = addEdgeFrom;
+            const to = nid;
+            if (from === to) {
+              alert('起点和终点不能相同');
+              return;
+            }
+            const cost = parseInt((document.getElementById('add-edge-cost') || {}).value, 10);
+            if (isNaN(cost) || cost < 1 || cost > 1000) {
+              alert('费用必须在 1-1000 之间');
+              return;
+            }
+            const des = (document.getElementById('add-edge-des') || {}).value || '';
+            const typeNum = parseInt((document.getElementById('add-edge-type') || {}).value, 10);
+            const statusNum = parseInt((document.getElementById('add-edge-status') || {}).value, 10);
+            const payload = { from: from, to: to, cost: cost, des: des };
+            if (!isNaN(typeNum)) payload.type = typeNum;
+            if (!isNaN(statusNum)) payload.status = statusNum;
+            fetch('/add-edge', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(payload),
+            })
+              .then(function (res) {
+                if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
+                fullEdges.push({ from: from, to: to, cost: cost, des: des, type: payload.type, status: payload.status });
+                const id = edgeId(from, to);
+                edges.add({ id: id, from: from, to: to, label: String(cost), smooth: edgeSmoothFor(from, to) });
+                updateBidiStylesForPair(from, to);
+                addEdgeFrom = null;
+                setEdgeModeStatus();
+              })
+              .catch(function (e) { alert('添加边失败: ' + e.message); });
+            return;
+          }
+
           if (params.edges.length !== 1) return;
           const id = params.edges[0];
           const parsed = parseEdgeId(id);
@@ -117,7 +221,8 @@
               return;
             }
             var eObj = fullEdges.find(function (e) {
-              var f = e.from != null ? e.from : e.From, t = e.to != null ? e.to : e.To;
+              var ftc = edgeFromToCost(e);
+              var f = ftc.from, t = ftc.to;
               return f === from && t === to;
             });
             var payload = { from: from, to: to, cost: cost };
@@ -131,7 +236,8 @@
                 if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
                 edges.update({ id: id, label: String(cost) });
                 const eObj = fullEdges.find(function (e) {
-                  var f = e.from != null ? e.from : e.From, t = e.to != null ? e.to : e.To;
+                  var ftc = edgeFromToCost(e);
+                  var f = ftc.from, t = ftc.to;
                   return f === from && t === to;
                 });
                 if (eObj) eObj.cost = cost;
@@ -161,11 +267,12 @@
   }
 
   function getNodeById(id) {
-    return fullNodes.find(function (n) { return (n.id || n.ID) === id; });
+    return fullNodes.find(function (n) { return nodeIdOf(n) === id; });
   }
   function getEdgeByFromTo(from, to) {
     return fullEdges.find(function (e) {
-      var f = e.from != null ? e.from : e.From, t = e.to != null ? e.to : e.To;
+      var ftc = edgeFromToCost(e);
+      var f = ftc.from, t = ftc.to;
       return f === from && t === to;
     });
   }
@@ -220,11 +327,7 @@
       '<label>状态 (status)</label><input type="number" id="detail-status" value="' + escapeAttr(statusVal) + '">';
     document.getElementById('detail-overlay').classList.add('show');
   }
-  function parseEdgeId(id) {
-    var i = id.indexOf('->');
-    if (i === -1) return null;
-    return { from: id.slice(0, i), to: id.slice(i + 2) };
-  }
+  // parseEdgeId is defined above
 
   document.getElementById('detail-cancel').addEventListener('click', function () {
     document.getElementById('detail-overlay').classList.remove('show');
@@ -290,6 +393,54 @@
         .catch(function (e) { alert('更新失败: ' + e.message); });
     }
   });
+
+  // Sidebar actions
+  const btnAddNode = document.getElementById('btn-add-node');
+  if (btnAddNode) {
+    btnAddNode.addEventListener('click', function () {
+      const idEl = document.getElementById('add-node-id');
+      const id = idEl ? idEl.value.trim() : '';
+      if (!id) { alert('节点 ID 不能为空'); return; }
+      if (getNodeById(id)) { alert('节点已存在: ' + id); return; }
+
+      const des = (document.getElementById('add-node-des') || {}).value || '';
+      const typeNum = parseInt((document.getElementById('add-node-type') || {}).value, 10);
+      const statusNum = parseInt((document.getElementById('add-node-status') || {}).value, 10);
+
+      let x = (Math.random() - 0.5) * 200, y = (Math.random() - 0.5) * 200;
+      if (network && typeof network.getViewPosition === 'function') {
+        const vp = network.getViewPosition();
+        x = vp.x + (Math.random() - 0.5) * 120;
+        y = vp.y + (Math.random() - 0.5) * 120;
+      }
+      const payload = { id: id, x: x, y: y, des: des };
+      if (!isNaN(typeNum)) payload.type = typeNum;
+      if (!isNaN(statusNum)) payload.status = statusNum;
+
+      fetch('/add-node', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+        .then(function (res) {
+          if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
+          fullNodes.push({ id: id, x: x, y: y, des: des, type: payload.type, status: payload.status });
+          nodes.add({ id: id, label: id, x: x, y: y });
+          if (idEl) idEl.value = '';
+        })
+        .catch(function (e) { alert('添加节点失败: ' + e.message); });
+    });
+  }
+
+  const btnEdgeMode = document.getElementById('btn-edge-mode');
+  if (btnEdgeMode) {
+    btnEdgeMode.addEventListener('click', function () {
+      addEdgeMode = !addEdgeMode;
+      addEdgeFrom = null;
+      btnEdgeMode.textContent = addEdgeMode ? '退出“添加边模式”' : '进入“添加边模式”';
+      setEdgeModeStatus();
+    });
+  }
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', loadAndRender);

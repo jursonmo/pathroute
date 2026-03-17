@@ -1,76 +1,82 @@
 {
   "edges": [
     {
+      "cost": 50,
       "des": "A to B edge",
       "from": "A",
       "status": 1,
       "to": "B",
-      "type": 1,
-      "cost": 50
+      "type": 1
     },
     {
+      "cost": 80,
       "des": "B to A edge",
       "from": "B",
       "status": 1,
       "to": "A",
-      "type": 1,
-      "cost": 80
+      "type": 1
     },
     {
+      "cost": 10,
       "des": "A to C edge",
       "from": "A",
       "status": 1,
       "to": "C",
-      "type": 2,
-      "cost": 10
+      "type": 2
     },
     {
+      "cost": 15,
       "des": "A to E edge",
       "from": "A",
       "status": 1,
       "to": "E",
-      "type": 1,
-      "cost": 15
+      "type": 1
     },
     {
+      "cost": 30,
       "des": "B to C edge",
       "from": "B",
       "status": 1,
       "to": "C",
-      "type": 1,
-      "cost": 30
+      "type": 1
     },
     {
+      "cost": 10,
       "des": "C to D edge",
       "from": "C",
       "status": 1,
       "to": "D",
-      "type": 1,
-      "cost": 10
+      "type": 1
     },
     {
+      "cost": 10,
       "des": "E to D edge",
       "from": "E",
       "status": 1,
       "to": "D",
-      "type": 1,
-      "cost": 10
+      "type": 1
     },
     {
+      "cost": 10,
       "des": "D to F edge",
       "from": "D",
       "status": 1,
       "to": "F",
-      "type": 1,
-      "cost": 10
+      "type": 1
     },
     {
+      "cost": 15,
       "des": "B to D edge",
       "from": "B",
       "status": 1,
       "to": "D",
-      "type": 1,
-      "cost": 15
+      "type": 1
+    },
+    {
+      "cost": 100,
+      "des": "",
+      "from": "G",
+      "to": "F"
     }
   ],
   "nodes": [
@@ -88,7 +94,7 @@
       "status": 1,
       "type": 1,
       "x": -19,
-      "y": 40
+      "y": 62
     },
     {
       "des": "C node",
@@ -121,6 +127,14 @@
       "type": 1,
       "x": -74,
       "y": 274
+    },
+    {
+      "des": "node G",
+      "id": "G",
+      "status": 1,
+      "type": 1,
+      "x": 71,
+      "y": 353
     }
   ]
 }
