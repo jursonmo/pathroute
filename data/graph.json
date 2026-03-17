@@ -1,81 +1,126 @@
 {
+  "edges": [
+    {
+      "des": "A to B edge",
+      "from": "A",
+      "status": 1,
+      "to": "B",
+      "type": 1,
+      "weight": 50
+    },
+    {
+      "des": "B to A edge",
+      "from": "B",
+      "status": 1,
+      "to": "A",
+      "type": 1,
+      "weight": 80
+    },
+    {
+      "des": "A to C edge",
+      "from": "A",
+      "status": 1,
+      "to": "C",
+      "type": 2,
+      "weight": 10
+    },
+    {
+      "des": "A to E edge",
+      "from": "A",
+      "status": 1,
+      "to": "E",
+      "type": 1,
+      "weight": 15
+    },
+    {
+      "des": "B to C edge",
+      "from": "B",
+      "status": 1,
+      "to": "C",
+      "type": 1,
+      "weight": 30
+    },
+    {
+      "des": "C to D edge",
+      "from": "C",
+      "status": 1,
+      "to": "D",
+      "type": 1,
+      "weight": 10
+    },
+    {
+      "des": "E to D edge",
+      "from": "E",
+      "status": 1,
+      "to": "D",
+      "type": 1,
+      "weight": 10
+    },
+    {
+      "des": "D to F edge",
+      "from": "D",
+      "status": 1,
+      "to": "F",
+      "type": 1,
+      "weight": 10
+    },
+    {
+      "des": "B to D edge",
+      "from": "B",
+      "status": 1,
+      "to": "D",
+      "type": 1,
+      "weight": 15
+    }
+  ],
   "nodes": [
     {
+      "des": "A node",
       "id": "A",
-      "x": 262,
-      "y": -153
+      "status": 3,
+      "type": 3,
+      "x": 309,
+      "y": -65
     },
     {
+      "des": "B node",
       "id": "B",
-      "x": -7,
-      "y": 6
+      "status": 1,
+      "type": 1,
+      "x": -19,
+      "y": 40
     },
     {
+      "des": "C node",
       "id": "C",
+      "status": 1,
+      "type": 1,
       "x": 117,
       "y": 237
     },
     {
+      "des": "D node",
       "id": "D",
+      "status": 1,
+      "type": 1,
       "x": -342,
       "y": 98
     },
     {
+      "des": "E node",
       "id": "E",
+      "status": 1,
+      "type": 1,
       "x": 7,
       "y": -155
     },
     {
+      "des": "F node",
       "id": "F",
+      "status": 1,
+      "type": 1,
       "x": -74,
       "y": 274
-    }
-  ],
-  "edges": [
-    {
-      "from": "A",
-      "to": "B",
-      "weight": 50
-    },
-    {
-      "from": "B",
-      "to": "A",
-      "weight": 80
-    },
-    {
-      "from": "A",
-      "to": "C",
-      "weight": 10
-    },
-    {
-      "from": "A",
-      "to": "E",
-      "weight": 15
-    },
-    {
-      "from": "B",
-      "to": "C",
-      "weight": 30
-    },
-    {
-      "from": "C",
-      "to": "D",
-      "weight": 10
-    },
-    {
-      "from": "E",
-      "to": "D",
-      "weight": 10
-    },
-    {
-      "from": "D",
-      "to": "F",
-      "weight": 10
-    },
-    {
-      "from": "B",
-      "to": "D",
-      "weight": 15
     }
   ]
 }

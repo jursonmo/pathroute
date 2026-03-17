@@ -8,10 +8,31 @@
   <style>
     body { margin: 0; font-family: system-ui, sans-serif; background: #1a1a2e; color: #eee; }
     #graph { width: 100vw; height: 100vh; background: #1a1a2e; }
+    #detail-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; align-items: center; justify-content: center; }
+    #detail-overlay.show { display: flex; }
+    #detail-modal { background: #16213e; border-radius: 8px; padding: 20px; min-width: 320px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    #detail-modal h3 { margin: 0 0 16px 0; color: #e94560; }
+    #detail-modal label { display: block; margin-top: 10px; color: #aaa; font-size: 12px; }
+    #detail-modal input, #detail-modal textarea { width: 100%; box-sizing: border-box; margin-top: 4px; padding: 8px; background: #1a1a2e; border: 1px solid #0f3460; color: #eee; border-radius: 4px; }
+    #detail-modal input[readonly] { color: #888; }
+    #detail-modal .btns { margin-top: 20px; display: flex; gap: 10px; justify-content: flex-end; }
+    #detail-modal button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    #detail-modal .btn-save { background: #e94560; color: #fff; }
+    #detail-modal .btn-cancel { background: #0f3460; color: #eee; }
   </style>
 </head>
 <body>
   <div id="graph"></div>
+  <div id="detail-overlay">
+    <div id="detail-modal">
+      <h3 id="detail-title">详情</h3>
+      <div id="detail-fields"></div>
+      <div class="btns">
+        <button type="button" class="btn-cancel" id="detail-cancel">取消</button>
+        <button type="button" class="btn-save" id="detail-save">保存</button>
+      </div>
+    </div>
+  </div>
   <script src="app.js"></script>
 </body>
 </html>
