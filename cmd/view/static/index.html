@@ -88,6 +88,15 @@
         </div>
         <div class="hint">开启模式后：先点击起点节点，再点击终点节点，即可创建有向边。</div>
       </div>
+
+      <div class="section">
+        <div style="font-size: 13px; color: #eee; margin-bottom: 6px;">最短路径</div>
+        <button class="btn btn-primary" id="btn-calc" type="button">计算路径</button>
+        <button class="btn btn-secondary" id="btn-shortest-mode" type="button">进入“显示最短路径模式”</button>
+        <div class="status" id="shortest-mode-status">未开启最短路径模式</div>
+        <div class="hint">先点“计算路径”，再进入模式：在画布上点击起点节点，再点击终点节点，即可看到 top4。</div>
+        <div class="status" id="path-results">暂无结果</div>
+      </div>
     </div>
     <div id="graph"></div>
   </div>

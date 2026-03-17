@@ -7,6 +7,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/jursonmo/pathroute/floyd"
+	"github.com/jursonmo/pathroute/graph"
 )
 
 //go:embed static/*
@@ -22,6 +25,25 @@ func main() {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Write(data)
+	})
+
+	// Calculate shortest paths: POST /calculate
+	// Returns all pairs results so frontend can pick any (from,to) quickly.
+	http.HandleFunc("/calculate", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		g, err := graph.NewFromJSON("data/graph.json")
+		if err != nil {
+			http.Error(w, "load graph: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		res := floyd.RunFloyd(g)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(struct {
+			Results []floyd.PairResult `json:"results"`
+		}{Results: res.Results})
 	})
 
 	// Add node: POST /add-node {id, x?, y?, des?, type?, status?}

@@ -11,6 +11,9 @@
   let editContext = null; // { type: 'node', id } | { type: 'edge', from, to }
   let addEdgeMode = false;
   let addEdgeFrom = null;
+  let shortestMode = false;
+  let shortestStart = null;
+  let shortestResults = null; // Map key "A->B" -> PairResult
 
   const options = {
     nodes: {
@@ -96,6 +99,115 @@
     el.textContent = '已选择起点：' + addEdgeFrom + '，请点击终点节点';
   }
 
+  function setShortestModeStatus() {
+    const el = document.getElementById('shortest-mode-status');
+    if (!el) return;
+    if (!shortestMode) {
+      el.textContent = '未开启最短路径模式';
+      return;
+    }
+    if (!shortestResults) {
+      el.textContent = '最短路径模式已开启：请先点击“计算路径”';
+      return;
+    }
+    if (!shortestStart) {
+      el.textContent = '最短路径模式已开启：请点击起点节点';
+      return;
+    }
+    el.textContent = '已选择起点：' + shortestStart + '，请点击终点节点';
+  }
+
+  function setPathResults(html) {
+    const el = document.getElementById('path-results');
+    if (!el) return;
+    el.innerHTML = html;
+  }
+
+  const DEFAULT_EDGE_COLOR = '#4a9eff';
+  const DEFAULT_NODE_BG = '#0f3460';
+  const DEFAULT_NODE_BORDER = '#e94560';
+  let highlightedNodeIDs = [];
+  let highlightedEdgeIDs = [];
+
+  function clearHighlights() {
+    if (highlightedNodeIDs.length) {
+      nodes.update(highlightedNodeIDs.map(function (id) {
+        return { id: id, color: { background: DEFAULT_NODE_BG, border: DEFAULT_NODE_BORDER } };
+      }));
+    }
+    if (highlightedEdgeIDs.length) {
+      edges.update(highlightedEdgeIDs.map(function (id) {
+        // preserve smooth if present
+        const parsed = parseEdgeId(id);
+        let smooth = undefined;
+        if (parsed) smooth = edgeSmoothFor(parsed.from, parsed.to);
+        return { id: id, color: { color: DEFAULT_EDGE_COLOR }, width: 1, smooth: smooth };
+      }));
+    }
+    highlightedNodeIDs = [];
+    highlightedEdgeIDs = [];
+  }
+
+  function highlightPath(path) {
+    clearHighlights();
+    if (!path || !path.length) return;
+    highlightedNodeIDs = path.slice();
+    nodes.update(path.map(function (id) {
+      return { id: id, color: { background: '#e94560', border: '#ffffff' } };
+    }));
+    const eids = [];
+    for (let i = 0; i + 1 < path.length; i++) {
+      eids.push(edgeId(path[i], path[i + 1]));
+    }
+    highlightedEdgeIDs = eids;
+    edges.update(eids.map(function (id) {
+      return { id: id, color: { color: '#e94560' }, width: 4 };
+    }));
+  }
+
+  function buildResultsMap(resultsArr) {
+    const m = new Map();
+    (resultsArr || []).forEach(function (pr) {
+      m.set(edgeId(pr.from, pr.to), pr);
+    });
+    return m;
+  }
+
+  function renderTop4(from, to, pr) {
+    if (!pr || !pr.paths || !pr.paths.length) {
+      setPathResults('<div>从 <b>' + escapeAttr(from) + '</b> 到 <b>' + escapeAttr(to) + '</b>：不可达</div>');
+      clearHighlights();
+      return;
+    }
+    const list = pr.paths.slice(0, 4);
+    let html = '<div style="margin-bottom:8px;">从 <b>' + escapeAttr(from) + '</b> 到 <b>' + escapeAttr(to) + '</b></div>';
+    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    list.forEach(function (p, idx) {
+      const text = (p.path || []).join(' → ');
+      const dist = p.distance;
+      html += '<button type="button" data-path-idx="' + idx + '" style="text-align:left;background:#1a1a2e;border:1px solid #0f3460;color:#eee;border-radius:6px;padding:8px;cursor:pointer;">'
+        + '<div style="font-size:12px;color:#aaa;margin-bottom:4px;">Top ' + (idx + 1) + '，总费用: ' + escapeAttr(dist) + '</div>'
+        + '<div style="font-size:13px;">' + escapeAttr(text) + '</div>'
+        + '</button>';
+    });
+    html += '</div>';
+    setPathResults(html);
+
+    // default highlight top1
+    highlightPath(list[0].path || []);
+
+    const box = document.getElementById('path-results');
+    if (box) {
+      Array.from(box.querySelectorAll('button[data-path-idx]')).forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          const i = parseInt(btn.getAttribute('data-path-idx'), 10);
+          if (isNaN(i) || !list[i]) return;
+          highlightPath(list[i].path || []);
+        });
+      });
+    }
+  }
+
   function loadAndRender() {
     fetch('/graph')
       .then((r) => r.json())
@@ -145,6 +257,7 @@
 
         network = new vis.Network(container, { nodes, edges }, options);
         setEdgeModeStatus();
+        setShortestModeStatus();
 
         // 拖动结束时，把新的坐标保存回后端（更新 data/graph.json）
         network.on('dragEnd', function (params) {
@@ -159,8 +272,28 @@
           }).catch((e) => console.error('save-position failed', e));
         });
 
-        // 点击：在添加边模式下优先处理节点点击；否则保持单击边改费用逻辑
+        // 点击：最短路径模式/添加边模式优先处理节点点击；否则保持单击边改费用逻辑
         network.on('click', function (params) {
+          if (shortestMode && params.nodes.length === 1) {
+            const nid = params.nodes[0];
+            if (!shortestResults) {
+              alert('请先点击“计算路径”');
+              return;
+            }
+            if (!shortestStart) {
+              shortestStart = nid;
+              setShortestModeStatus();
+              return;
+            }
+            const from = shortestStart;
+            const to = nid;
+            shortestStart = null;
+            setShortestModeStatus();
+            const pr = shortestResults.get(edgeId(from, to));
+            renderTop4(from, to, pr);
+            return;
+          }
+
           if (addEdgeMode && params.nodes.length === 1) {
             const nid = params.nodes[0];
             if (!addEdgeFrom) {
@@ -439,6 +572,59 @@
       addEdgeFrom = null;
       btnEdgeMode.textContent = addEdgeMode ? '退出“添加边模式”' : '进入“添加边模式”';
       setEdgeModeStatus();
+
+      if (addEdgeMode) {
+        // avoid conflicts
+        shortestMode = false;
+        shortestStart = null;
+        setShortestModeStatus();
+        const btn = document.getElementById('btn-shortest-mode');
+        if (btn) btn.textContent = '进入“显示最短路径模式”';
+      }
+    });
+  }
+
+  const btnCalc = document.getElementById('btn-calc');
+  if (btnCalc) {
+    btnCalc.addEventListener('click', function () {
+      btnCalc.disabled = true;
+      btnCalc.textContent = '计算中...';
+      fetch('/calculate', { method: 'POST' })
+        .then(function (res) {
+          if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
+          return res.json();
+        })
+        .then(function (data) {
+          shortestResults = buildResultsMap(data.results || []);
+          setPathResults('已计算完成：进入模式后点击起点/终点查看 top4');
+          setShortestModeStatus();
+        })
+        .catch(function (e) {
+          alert('计算失败: ' + e.message);
+        })
+        .finally(function () {
+          btnCalc.disabled = false;
+          btnCalc.textContent = '计算路径';
+        });
+    });
+  }
+
+  const btnShortestMode = document.getElementById('btn-shortest-mode');
+  if (btnShortestMode) {
+    btnShortestMode.addEventListener('click', function () {
+      shortestMode = !shortestMode;
+      shortestStart = null;
+      btnShortestMode.textContent = shortestMode ? '退出“显示最短路径模式”' : '进入“显示最短路径模式”';
+      setShortestModeStatus();
+      clearHighlights();
+      if (shortestMode) {
+        // avoid conflicts
+        addEdgeMode = false;
+        addEdgeFrom = null;
+        setEdgeModeStatus();
+        const btn = document.getElementById('btn-edge-mode');
+        if (btn) btn.textContent = '进入“添加边模式”';
+      }
     });
   }
 
