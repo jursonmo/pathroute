@@ -59,7 +59,7 @@
           const isBidi = edgeIds[revId];
           const edge = { id, from, to, label: String(w) };
           if (isBidi) {
-            edge.smooth = id < revId ? { type: 'curvedCW', roundness: 0.5 } : { type: 'curvedCW', roundness: -0.5 };
+            edge.smooth = id < revId ? false : { type: 'curvedCW', roundness: 0.4 };
           }
           return edge;
         });
