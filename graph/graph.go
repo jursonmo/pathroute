@@ -7,15 +7,15 @@ import (
 )
 
 const (
-	MinWeight = 1
-	MaxWeight = 1000
+	MinCost = 1
+	MaxCost = 1000
 )
 
 // Edge represents a directed edge in the JSON input.
 type Edge struct {
 	From   string `json:"from"`
 	To     string `json:"to"`
-	Weight int    `json:"weight"`
+	Cost   int    `json:"cost"`
 	Type   int    `json:"type"`
 	Status int    `json:"status"` // 0: unknown, 1: normal, 2: blocked
 	Des    string `json:"des"`    // description
@@ -43,15 +43,15 @@ type rawGraphFile struct {
 	Edges []Edge          `json:"edges"`
 }
 
-// Graph holds nodes and directed edges with weights.
+// Graph holds nodes and directed edges with costs.
 type Graph struct {
 	Nodes       []string
 	NameToIndex map[string]int
-	// AdjMatrix[i][j] = weight from node i to j; 0 means no edge (use Inf for unreachable in algo)
+	// AdjMatrix[i][j] = cost from node i to j; 0 means no edge (use Inf for unreachable in algo)
 	AdjMatrix [][]int
 }
 
-// NewFromJSON loads a graph from a JSON file. Weights must be in [MinWeight, MaxWeight].
+// NewFromJSON loads a graph from a JSON file. Costs must be in [MinCost, MaxCost].
 // If nodes is empty, nodes are inferred from edges.
 // The "nodes" field may be either ["A","B",...] or [{"id":"A","x":0,"y":0},...]; x,y are ignored.
 func NewFromJSON(path string) (*Graph, error) {
@@ -91,7 +91,7 @@ func parseNodeIDs(raw json.RawMessage) ([]string, error) {
 	return ids, nil
 }
 
-// NewFromStruct builds a Graph from GraphJSON. Validates weights in [1, 1000].
+// NewFromStruct builds a Graph from GraphJSON. Validates costs in [1, 1000].
 func NewFromStruct(gj *GraphJSON) (*Graph, error) {
 	nodeSet := make(map[string]struct{})
 	for _, n := range gj.Nodes {
@@ -100,8 +100,8 @@ func NewFromStruct(gj *GraphJSON) (*Graph, error) {
 	for _, e := range gj.Edges {
 		nodeSet[e.From] = struct{}{}
 		nodeSet[e.To] = struct{}{}
-		if e.Weight < MinWeight || e.Weight > MaxWeight {
-			return nil, fmt.Errorf("edge %s -> %s weight %d out of range [%d, %d]", e.From, e.To, e.Weight, MinWeight, MaxWeight)
+		if e.Cost < MinCost || e.Cost > MaxCost {
+			return nil, fmt.Errorf("edge %s -> %s cost %d out of range [%d, %d]", e.From, e.To, e.Cost, MinCost, MaxCost)
 		}
 	}
 	// stable order: first from Nodes, then any from edges
@@ -135,7 +135,7 @@ func NewFromStruct(gj *GraphJSON) (*Graph, error) {
 	}
 	for _, e := range gj.Edges {
 		from, to := nameToIndex[e.From], nameToIndex[e.To]
-		adj[from][to] = e.Weight
+		adj[from][to] = e.Cost
 	}
 	return &Graph{
 		Nodes:       nodes,
@@ -156,8 +156,8 @@ func (g *Graph) Index(name string) (int, bool) {
 // Name returns node name by index.
 func (g *Graph) Name(i int) string { return g.Nodes[i] }
 
-// Weight returns the weight of edge from i to j; 0 means no edge.
-func (g *Graph) Weight(i, j int) int { return g.AdjMatrix[i][j] }
+// Cost returns the cost of edge from i to j; 0 means no edge.
+func (g *Graph) Cost(i, j int) int { return g.AdjMatrix[i][j] }
 
 // Neighbors returns out-neighbors of node index i (nodes j such that edge i->j exists).
 func (g *Graph) Neighbors(i int) []int {

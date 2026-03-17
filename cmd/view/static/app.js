@@ -59,7 +59,7 @@
         const vsEdges = edgeList.map((e) => {
           const from = e.from != null ? e.from : e.From;
           const to = e.to != null ? e.to : e.To;
-          const w = e.weight != null ? e.weight : e.Weight;
+          const w = e.cost != null ? e.cost : e.Cost;
           const id = edgeId(from, to);
           const revId = edgeId(to, from);
           const isBidi = edgeIds[revId];
@@ -97,7 +97,7 @@
           }).catch((e) => console.error('save-position failed', e));
         });
 
-        // 单击边：延迟弹出权值框，若随后发生双击则取消（双击会打开详情弹窗）
+        // 单击边：延迟弹出费用框，若随后发生双击则取消（双击会打开详情弹窗）
         network.on('click', function (params) {
           if (params.edges.length !== 1) return;
           const id = params.edges[0];
@@ -109,18 +109,18 @@
             const from = parsed.from, to = parsed.to;
             const edge = edges.get(id);
             const cur = edge && edge.label != null ? String(edge.label) : '';
-            const input = prompt(from + ' → ' + to + ' 的权值 (1-1000):', cur);
+            const input = prompt(from + ' → ' + to + ' 的费用 (1-1000):', cur);
             if (input === null) return;
-            const weight = parseInt(input, 10);
-            if (isNaN(weight) || weight < 1 || weight > 1000) {
-              alert('权值必须在 1-1000 之间');
+            const cost = parseInt(input, 10);
+            if (isNaN(cost) || cost < 1 || cost > 1000) {
+              alert('费用必须在 1-1000 之间');
               return;
             }
             var eObj = fullEdges.find(function (e) {
               var f = e.from != null ? e.from : e.From, t = e.to != null ? e.to : e.To;
               return f === from && t === to;
             });
-            var payload = { from: from, to: to, weight: weight };
+            var payload = { from: from, to: to, cost: cost };
             if (eObj) { payload.des = eObj.des != null ? eObj.des : eObj.Des || ''; if (eObj.type !== undefined && eObj.type !== null) payload.type = eObj.type; else if (eObj.Type !== undefined && eObj.Type !== null) payload.type = eObj.Type; if (eObj.status !== undefined && eObj.status !== null) payload.status = eObj.status; else if (eObj.Status !== undefined && eObj.Status !== null) payload.status = eObj.Status; }
             fetch('/update-edge', {
               method: 'POST',
@@ -129,12 +129,12 @@
             })
               .then(function (res) {
                 if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
-                edges.update({ id: id, label: String(weight) });
+                edges.update({ id: id, label: String(cost) });
                 const eObj = fullEdges.find(function (e) {
                   var f = e.from != null ? e.from : e.From, t = e.to != null ? e.to : e.To;
                   return f === from && t === to;
                 });
-                if (eObj) eObj.weight = weight;
+                if (eObj) eObj.cost = cost;
               })
               .catch(function (e) { alert('更新失败: ' + e.message); });
           }, 250);
@@ -206,7 +206,7 @@
     var edge = getEdgeByFromTo(from, to);
     if (!edge) return;
     editContext = { type: 'edge', from: from, to: to };
-    var weight = edge.weight != null ? edge.weight : edge.Weight;
+    var costVal = edge.cost != null ? edge.cost : edge.Cost;
     var des = val(edge, 'des', '');
     var typeVal = (edge.type !== undefined && edge.type !== null) ? edge.type : ((edge.Type !== undefined && edge.Type !== null) ? edge.Type : '');
     var statusVal = (edge.status !== undefined && edge.status !== null) ? edge.status : ((edge.Status !== undefined && edge.Status !== null) ? edge.Status : '');
@@ -214,7 +214,7 @@
     document.getElementById('detail-fields').innerHTML =
       '<label>起点 (from)</label><input type="text" id="detail-from" readonly value="' + escapeAttr(from) + '">' +
       '<label>终点 (to)</label><input type="text" id="detail-to" readonly value="' + escapeAttr(to) + '">' +
-      '<label>权值 (weight)</label><input type="number" id="detail-weight" min="1" max="1000" value="' + escapeAttr(weight) + '">' +
+      '<label>费用 (cost)</label><input type="number" id="detail-cost" min="1" max="1000" value="' + escapeAttr(costVal) + '">' +
       '<label>描述 (des)</label><input type="text" id="detail-des" value="' + escapeAttr(des) + '">' +
       '<label>类型 (type)</label><input type="number" id="detail-type" value="' + escapeAttr(typeVal) + '">' +
       '<label>状态 (status)</label><input type="number" id="detail-status" value="' + escapeAttr(statusVal) + '">';
@@ -265,13 +265,13 @@
     if (editContext.type === 'edge') {
       var from = document.getElementById('detail-from').value.trim();
       var to = document.getElementById('detail-to').value.trim();
-      var weight = parseInt(document.getElementById('detail-weight').value, 10);
+      var cost = parseInt(document.getElementById('detail-cost').value, 10);
       var des = document.getElementById('detail-des').value;
       var typeNum = parseInt(document.getElementById('detail-type').value, 10);
       var statusNum = parseInt(document.getElementById('detail-status').value, 10);
       if (from === '' || to === '') { alert('起点和终点不能为空'); return; }
-      if (isNaN(weight) || weight < 1 || weight > 1000) { alert('权值必须在 1-1000 之间'); return; }
-      var payload = { from: from, to: to, weight: weight, des: des };
+      if (isNaN(cost) || cost < 1 || cost > 1000) { alert('费用必须在 1-1000 之间'); return; }
+      var payload = { from: from, to: to, cost: cost, des: des };
       if (!isNaN(typeNum)) payload.type = typeNum;
       if (!isNaN(statusNum)) payload.status = statusNum;
       fetch('/update-edge', {
@@ -282,8 +282,8 @@
         .then(function (res) {
           if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
           var edge = getEdgeByFromTo(from, to);
-          if (edge) { edge.weight = weight; edge.des = des; if (!isNaN(typeNum)) edge.type = typeNum; if (!isNaN(statusNum)) edge.status = statusNum; }
-          edges.update({ id: from + '->' + to, label: String(weight) });
+          if (edge) { edge.cost = cost; edge.des = des; if (!isNaN(typeNum)) edge.type = typeNum; if (!isNaN(statusNum)) edge.status = statusNum; }
+          edges.update({ id: from + '->' + to, label: String(cost) });
           document.getElementById('detail-overlay').classList.remove('show');
           editContext = null;
         })

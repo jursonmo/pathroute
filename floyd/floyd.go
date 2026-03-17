@@ -49,7 +49,7 @@ func RunFloyd(g *graph.Graph) *AllPairsResult {
 			dist[i][j] = Inf
 			if i == j {
 				dist[i][j] = 0
-			} else if w := g.Weight(i, j); w > 0 {
+			} else if w := g.Cost(i, j); w > 0 {
 				dist[i][j] = w
 			}
 		}
@@ -83,7 +83,7 @@ func RunFloyd(g *graph.Graph) *AllPairsResult {
 				if m == i {
 					continue
 				}
-				w := g.Weight(m, j)
+				w := g.Cost(m, j)
 				if w > 0 && dist[i][m] != Inf && dist[i][m]+w == dist[i][j] {
 					pred[i][j] = append(pred[i][j], m)
 				}
@@ -150,7 +150,7 @@ func collectPaths(g *graph.Graph, dist [][]int, pred [][][]int, i, j int, suffix
 		return
 	}
 	// Direct edge (i,j): add path [i,j,...] if it is a shortest path (avoids cycle from pred with m==i).
-	if w := g.Weight(i, j); w > 0 && w == dist[i][j] {
+	if w := g.Cost(i, j); w > 0 && w == dist[i][j] {
 		path := make([]string, 0, len(suffix)+1)
 		path = append(path, g.Name(i))
 		path = append(path, suffix...)
@@ -238,7 +238,7 @@ func KShortestSimplePaths(g *graph.Graph, fromIdx, toIdx int, k int) []PathDist 
 			if pathContains(s.path, nb) {
 				continue
 			}
-			w := g.Weight(last, nb)
+			w := g.Cost(last, nb)
 			newPath := make([]int, len(s.path)+1)
 			copy(newPath, s.path)
 			newPath[len(newPath)-1] = nb
@@ -272,7 +272,7 @@ func (r *AllPairsResult) FillViaNeighborPaths() {
 			}
 			var candidates []PathDist
 			for _, nb := range neighbors {
-				wSN := g.Weight(fromIdx, nb)
+				wSN := g.Cost(fromIdx, nb)
 				newNb := oldToNew[nb]
 				if newNb < 0 {
 					continue
@@ -309,7 +309,7 @@ func runFloydOnSubgraph(g *graph.Graph) (dist [][]int, pred [][][]int) {
 			dist[i][j] = Inf
 			if i == j {
 				dist[i][j] = 0
-			} else if w := g.Weight(i, j); w > 0 {
+			} else if w := g.Cost(i, j); w > 0 {
 				dist[i][j] = w
 			}
 		}
@@ -341,7 +341,7 @@ func runFloydOnSubgraph(g *graph.Graph) (dist [][]int, pred [][][]int) {
 				if m == i {
 					continue
 				}
-				w := g.Weight(m, j)
+				w := g.Cost(m, j)
 				if w > 0 && dist[i][m] != Inf && dist[i][m]+w == dist[i][j] {
 					pred[i][j] = append(pred[i][j], m)
 				}

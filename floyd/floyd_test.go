@@ -10,10 +10,10 @@ func TestFloyd_ThreeNodes(t *testing.T) {
 	gj := &graph.GraphJSON{
 		Nodes: []string{"A", "B", "C"},
 		Edges: []graph.Edge{
-			{From: "A", To: "B", Weight: 50},
-			{From: "B", To: "A", Weight: 80},
-			{From: "A", To: "C", Weight: 100},
-			{From: "B", To: "C", Weight: 20},
+			{From: "A", To: "B", Cost: 50},
+			{From: "B", To: "A", Cost: 80},
+			{From: "A", To: "C", Cost: 100},
+			{From: "B", To: "C", Cost: 20},
 		},
 	}
 	g, err := graph.NewFromStruct(gj)
@@ -48,11 +48,11 @@ func TestFloyd_TwoEqualPaths(t *testing.T) {
 	gj := &graph.GraphJSON{
 		Nodes: []string{"A", "C", "D", "E", "F"},
 		Edges: []graph.Edge{
-			{From: "A", To: "C", Weight: 10},
-			{From: "A", To: "E", Weight: 10},
-			{From: "C", To: "D", Weight: 10},
-			{From: "E", To: "D", Weight: 10},
-			{From: "D", To: "F", Weight: 10},
+			{From: "A", To: "C", Cost: 10},
+			{From: "A", To: "E", Cost: 10},
+			{From: "C", To: "D", Cost: 10},
+			{From: "E", To: "D", Cost: 10},
+			{From: "D", To: "F", Cost: 10},
 		},
 	}
 	g, _ := graph.NewFromStruct(gj)
@@ -69,7 +69,7 @@ func TestFloyd_TwoEqualPaths(t *testing.T) {
 func TestFloyd_Unreachable(t *testing.T) {
 	gj := &graph.GraphJSON{
 		Nodes: []string{"A", "B"},
-		Edges: []graph.Edge{{From: "A", To: "B", Weight: 1}},
+		Edges: []graph.Edge{{From: "A", To: "B", Cost: 1}},
 	}
 	g, _ := graph.NewFromStruct(gj)
 	r := RunFloyd(g)
@@ -84,12 +84,12 @@ func TestFloyd_MaxFourPaths(t *testing.T) {
 	gj := &graph.GraphJSON{
 		Nodes: []string{"A", "B", "C", "D", "E"},
 		Edges: []graph.Edge{
-			{From: "A", To: "B", Weight: 1},
-			{From: "A", To: "C", Weight: 1},
-			{From: "A", To: "D", Weight: 1},
-			{From: "B", To: "E", Weight: 1},
-			{From: "C", To: "E", Weight: 1},
-			{From: "D", To: "E", Weight: 1},
+			{From: "A", To: "B", Cost: 1},
+			{From: "A", To: "C", Cost: 1},
+			{From: "A", To: "D", Cost: 1},
+			{From: "B", To: "E", Cost: 1},
+			{From: "C", To: "E", Cost: 1},
+			{From: "D", To: "E", Cost: 1},
 		},
 	}
 	g, _ := graph.NewFromStruct(gj)
@@ -116,10 +116,10 @@ func TestFillViaNeighborPaths(t *testing.T) {
 	gj := &graph.GraphJSON{
 		Nodes: []string{"A", "B", "C", "D"},
 		Edges: []graph.Edge{
-			{From: "A", To: "B", Weight: 10},
-			{From: "A", To: "C", Weight: 10},
-			{From: "B", To: "D", Weight: 10},
-			{From: "C", To: "D", Weight: 10},
+			{From: "A", To: "B", Cost: 10},
+			{From: "A", To: "C", Cost: 10},
+			{From: "B", To: "D", Cost: 10},
+			{From: "C", To: "D", Cost: 10},
 		},
 	}
 	g, _ := graph.NewFromStruct(gj)
@@ -149,7 +149,7 @@ func TestFillViaNeighborPaths(t *testing.T) {
 func TestViaNeighbor_StartHasNoOutEdges(t *testing.T) {
 	gj := &graph.GraphJSON{
 		Nodes: []string{"A", "B"},
-		Edges: []graph.Edge{{From: "B", To: "A", Weight: 10}},
+		Edges: []graph.Edge{{From: "B", To: "A", Cost: 10}},
 	}
 	g, _ := graph.NewFromStruct(gj)
 	r := RunFloyd(g)

@@ -11,9 +11,9 @@ func TestNewFromStruct_Valid(t *testing.T) {
 	gj := &GraphJSON{
 		Nodes: []string{"A", "B", "C"},
 		Edges: []Edge{
-			{From: "A", To: "B", Weight: 50},
-			{From: "B", To: "A", Weight: 80},
-			{From: "A", To: "C", Weight: 100},
+			{From: "A", To: "B", Cost: 50},
+			{From: "B", To: "A", Cost: 80},
+			{From: "A", To: "C", Cost: 100},
 		},
 	}
 	g, err := NewFromStruct(gj)
@@ -23,37 +23,37 @@ func TestNewFromStruct_Valid(t *testing.T) {
 	if g.NumNodes() != 3 {
 		t.Errorf("expected 3 nodes, got %d", g.NumNodes())
 	}
-	if w := g.Weight(g.NameToIndex["A"], g.NameToIndex["B"]); w != 50 {
-		t.Errorf("A->B weight: got %d", w)
+	if w := g.Cost(g.NameToIndex["A"], g.NameToIndex["B"]); w != 50 {
+		t.Errorf("A->B cost: got %d", w)
 	}
-	if w := g.Weight(g.NameToIndex["B"], g.NameToIndex["A"]); w != 80 {
-		t.Errorf("B->A weight: got %d", w)
+	if w := g.Cost(g.NameToIndex["B"], g.NameToIndex["A"]); w != 80 {
+		t.Errorf("B->A cost: got %d", w)
 	}
 }
 
-func TestNewFromStruct_WeightRejected(t *testing.T) {
+func TestNewFromStruct_CostRejected(t *testing.T) {
 	gj := &GraphJSON{
 		Nodes: []string{"A", "B"},
 		Edges: []Edge{
-			{From: "A", To: "B", Weight: 0},
+			{From: "A", To: "B", Cost: 0},
 		},
 	}
 	_, err := NewFromStruct(gj)
 	if err == nil {
-		t.Error("expected error for weight 0")
+		t.Error("expected error for cost 0")
 	}
-	gj.Edges[0].Weight = 1001
+	gj.Edges[0].Cost = 1001
 	_, err = NewFromStruct(gj)
 	if err == nil {
-		t.Error("expected error for weight 1001")
+		t.Error("expected error for cost 1001")
 	}
-	gj.Edges[0].Weight = 1
+	gj.Edges[0].Cost = 1
 	g, err := NewFromStruct(gj)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if g.Weight(0, 1) != 1 {
-		t.Errorf("weight 1 should be valid")
+	if g.Cost(0, 1) != 1 {
+		t.Errorf("cost 1 should be valid")
 	}
 }
 
@@ -61,8 +61,8 @@ func TestNewFromStruct_NodesFromEdges(t *testing.T) {
 	gj := &GraphJSON{
 		Nodes: []string{},
 		Edges: []Edge{
-			{From: "X", To: "Y", Weight: 10},
-			{From: "Y", To: "Z", Weight: 20},
+			{From: "X", To: "Y", Cost: 10},
+			{From: "Y", To: "Z", Cost: 20},
 		},
 	}
 	g, err := NewFromStruct(gj)
@@ -85,7 +85,7 @@ func TestNewFromStruct_NodesFromEdges(t *testing.T) {
 func TestNewFromJSON(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "graph.json")
-	err := os.WriteFile(path, []byte(`{"nodes":["A","B"],"edges":[{"from":"A","to":"B","weight":50}]}`), 0644)
+	err := os.WriteFile(path, []byte(`{"nodes":["A","B"],"edges":[{"from":"A","to":"B","cost":50}]}`), 0644)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,8 +93,8 @@ func TestNewFromJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if g.NumNodes() != 2 || g.Weight(0, 1) != 50 {
-		t.Errorf("unexpected graph: nodes=%d weight=%d", g.NumNodes(), g.Weight(0, 1))
+	if g.NumNodes() != 2 || g.Cost(0, 1) != 50 {
+		t.Errorf("unexpected graph: nodes=%d cost=%d", g.NumNodes(), g.Cost(0, 1))
 	}
 }
 
@@ -102,8 +102,8 @@ func TestNeighbors(t *testing.T) {
 	gj := &GraphJSON{
 		Nodes: []string{"A", "B", "C"},
 		Edges: []Edge{
-			{From: "A", To: "B", Weight: 1},
-			{From: "A", To: "C", Weight: 1},
+			{From: "A", To: "B", Cost: 1},
+			{From: "A", To: "C", Cost: 1},
 		},
 	}
 	g, _ := NewFromStruct(gj)
@@ -125,9 +125,9 @@ func TestCopyWithoutNode(t *testing.T) {
 	gj := &GraphJSON{
 		Nodes: []string{"A", "B", "C"},
 		Edges: []Edge{
-			{From: "A", To: "B", Weight: 10},
-			{From: "B", To: "C", Weight: 20},
-			{From: "A", To: "C", Weight: 5},
+			{From: "A", To: "B", Cost: 10},
+			{From: "B", To: "C", Cost: 20},
+			{From: "A", To: "C", Cost: 5},
 		},
 	}
 	g, _ := NewFromStruct(gj)
@@ -141,15 +141,15 @@ func TestCopyWithoutNode(t *testing.T) {
 	}
 	// B and C remain; B->C should exist
 	idxB, idxC := oldToNew[g.NameToIndex["B"]], oldToNew[g.NameToIndex["C"]]
-	if sub.Weight(idxB, idxC) != 20 {
-		t.Errorf("B->C in subgraph: got %d", sub.Weight(idxB, idxC))
+	if sub.Cost(idxB, idxC) != 20 {
+		t.Errorf("B->C in subgraph: got %d", sub.Cost(idxB, idxC))
 	}
 }
 
 func TestGraphJSON_Roundtrip(t *testing.T) {
 	gj := &GraphJSON{
 		Nodes: []string{"A", "B"},
-		Edges: []Edge{{From: "A", To: "B", Weight: 100}},
+		Edges: []Edge{{From: "A", To: "B", Cost: 100}},
 	}
 	data, _ := json.Marshal(gj)
 	var decoded GraphJSON
@@ -160,7 +160,7 @@ func TestGraphJSON_Roundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if g.Weight(0, 1) != 100 {
-		t.Errorf("roundtrip weight: got %d", g.Weight(0, 1))
+	if g.Cost(0, 1) != 100 {
+		t.Errorf("roundtrip cost: got %d", g.Cost(0, 1))
 	}
 }

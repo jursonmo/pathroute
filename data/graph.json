@@ -6,7 +6,7 @@
       "status": 1,
       "to": "B",
       "type": 1,
-      "weight": 50
+      "cost": 50
     },
     {
       "des": "B to A edge",
@@ -14,7 +14,7 @@
       "status": 1,
       "to": "A",
       "type": 1,
-      "weight": 80
+      "cost": 80
     },
     {
       "des": "A to C edge",
@@ -22,7 +22,7 @@
       "status": 1,
       "to": "C",
       "type": 2,
-      "weight": 10
+      "cost": 10
     },
     {
       "des": "A to E edge",
@@ -30,7 +30,7 @@
       "status": 1,
       "to": "E",
       "type": 1,
-      "weight": 15
+      "cost": 15
     },
     {
       "des": "B to C edge",
@@ -38,7 +38,7 @@
       "status": 1,
       "to": "C",
       "type": 1,
-      "weight": 30
+      "cost": 30
     },
     {
       "des": "C to D edge",
@@ -46,7 +46,7 @@
       "status": 1,
       "to": "D",
       "type": 1,
-      "weight": 10
+      "cost": 10
     },
     {
       "des": "E to D edge",
@@ -54,7 +54,7 @@
       "status": 1,
       "to": "D",
       "type": 1,
-      "weight": 10
+      "cost": 10
     },
     {
       "des": "D to F edge",
@@ -62,7 +62,7 @@
       "status": 1,
       "to": "F",
       "type": 1,
-      "weight": 10
+      "cost": 10
     },
     {
       "des": "B to D edge",
@@ -70,7 +70,7 @@
       "status": 1,
       "to": "D",
       "type": 1,
-      "weight": 15
+      "cost": 15
     }
   ],
   "nodes": [

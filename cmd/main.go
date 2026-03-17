@@ -12,8 +12,8 @@ import (
 	"github.com/jursonmo/pathroute/graph"
 )
 
-// formatPathWithWeights returns "[A-50->B-20->C] sum: 70" style string.
-func formatPathWithWeights(g *graph.Graph, path []string, total int) string {
+// formatPathWithCosts returns "[A-50->B-20->C] sum: 70" style string.
+func formatPathWithCosts(g *graph.Graph, path []string, total int) string {
 	if len(path) == 0 {
 		return ""
 	}
@@ -27,7 +27,7 @@ func formatPathWithWeights(g *graph.Graph, path []string, total int) string {
 		idxB, okB := g.Index(path[i+1])
 		w := 0
 		if okA && okB {
-			w = g.Weight(idxA, idxB)
+			w = g.Cost(idxA, idxB)
 		}
 		b.WriteString(path[i])
 		b.WriteString("-")
@@ -67,7 +67,7 @@ func main() {
 		if len(pr.Paths) > 0 {
 			fmt.Printf(", shortest distance: %d, paths (top 4, got %d):\n", pr.Paths[0].Distance, len(pr.Paths))
 			for _, p := range pr.Paths {
-				fmt.Printf("    %s\n", formatPathWithWeights(g, p.Path, p.Distance))
+				fmt.Printf("    %s\n", formatPathWithCosts(g, p.Path, p.Distance))
 			}
 		} else {
 			fmt.Println()
@@ -75,7 +75,7 @@ func main() {
 		if len(pr.ViaNeighborPaths) > 0 {
 			fmt.Printf("  via-neighbor paths(%d):\n", len(pr.ViaNeighborPaths))
 			for _, v := range pr.ViaNeighborPaths {
-				fmt.Printf("    %s\n", formatPathWithWeights(g, v.Path, v.Distance))
+				fmt.Printf("    %s\n", formatPathWithCosts(g, v.Path, v.Distance))
 			}
 		}
 	}

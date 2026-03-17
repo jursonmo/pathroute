@@ -140,8 +140,8 @@ func main() {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	// Update edge weight: POST /update-edge {from, to, weight}
-	const minWeight, maxWeight = 1, 1000
+	// Update edge: POST /update-edge {from, to, cost, des?, type?, status?}
+	const minCost, maxCost = 1, 1000
 	http.HandleFunc("/update-edge", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -150,7 +150,7 @@ func main() {
 		var body struct {
 			From   string `json:"from"`
 			To     string `json:"to"`
-			Weight int    `json:"weight"`
+			Cost   int    `json:"cost"`
 			Des    string `json:"des"`
 			Type   *int   `json:"type"`
 			Status *int   `json:"status"`
@@ -163,8 +163,8 @@ func main() {
 			http.Error(w, "from and to required", http.StatusBadRequest)
 			return
 		}
-		if body.Weight != 0 && (body.Weight < minWeight || body.Weight > maxWeight) {
-			http.Error(w, "weight must be 1-1000", http.StatusBadRequest)
+		if body.Cost != 0 && (body.Cost < minCost || body.Cost > maxCost) {
+			http.Error(w, "cost must be 1-1000", http.StatusBadRequest)
 			return
 		}
 
@@ -188,8 +188,8 @@ func main() {
 			from, _ := m["from"].(string)
 			to, _ := m["to"].(string)
 			if from == body.From && to == body.To {
-				if body.Weight >= minWeight && body.Weight <= maxWeight {
-					m["weight"] = body.Weight
+				if body.Cost >= minCost && body.Cost <= maxCost {
+					m["cost"] = body.Cost
 				}
 				m["des"] = body.Des
 				if body.Type != nil {
