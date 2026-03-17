@@ -208,6 +208,67 @@
     }
   }
 
+  function ensureCalculated() {
+    if (shortestResults) return Promise.resolve();
+    const btnCalc = document.getElementById('btn-calc');
+    if (btnCalc) {
+      btnCalc.disabled = true;
+      btnCalc.textContent = '计算中...';
+    }
+    return fetch('/calculate', { method: 'POST' })
+      .then(function (res) {
+        if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
+        return res.json();
+      })
+      .then(function (data) {
+        shortestResults = buildResultsMap(data.results || []);
+        setShortestModeStatus();
+      })
+      .finally(function () {
+        if (btnCalc) {
+          btnCalc.disabled = false;
+          btnCalc.textContent = '计算路径';
+        }
+      });
+  }
+
+  function populateShortestSelects() {
+    const fromSel = document.getElementById('shortest-from');
+    const toSel = document.getElementById('shortest-to');
+    if (!fromSel || !toSel) return;
+
+    const prevFrom = fromSel.value;
+    const prevTo = toSel.value;
+
+    const ids = fullNodes.map(function (n) { return nodeIdOf(n); }).filter(Boolean).sort();
+
+    function setOptions(sel, keepVal) {
+      sel.innerHTML = '<option value="">请选择</option>' + ids.map(function (id) {
+        return '<option value="' + escapeAttr(id) + '">' + escapeAttr(id) + '</option>';
+      }).join('');
+      if (keepVal && ids.indexOf(keepVal) !== -1) sel.value = keepVal;
+    }
+    setOptions(fromSel, prevFrom);
+    setOptions(toSel, prevTo);
+  }
+
+  function maybeRenderSelectedPair() {
+    const fromSel = document.getElementById('shortest-from');
+    const toSel = document.getElementById('shortest-to');
+    if (!fromSel || !toSel) return;
+    const from = fromSel.value;
+    const to = toSel.value;
+    if (!from || !to) return;
+    ensureCalculated()
+      .then(function () {
+        const pr = shortestResults.get(edgeId(from, to));
+        renderTop4(from, to, pr);
+      })
+      .catch(function (e) {
+        alert('计算失败: ' + e.message);
+      });
+  }
+
   function loadAndRender() {
     fetch('/graph')
       .then((r) => r.json())
@@ -258,6 +319,7 @@
         network = new vis.Network(container, { nodes, edges }, options);
         setEdgeModeStatus();
         setShortestModeStatus();
+        populateShortestSelects();
 
         // 拖动结束时，把新的坐标保存回后端（更新 data/graph.json）
         network.on('dragEnd', function (params) {
@@ -559,6 +621,7 @@
           if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
           fullNodes.push({ id: id, x: x, y: y, des: des, type: payload.type, status: payload.status });
           nodes.add({ id: id, label: id, x: x, y: y });
+          populateShortestSelects();
           if (idEl) idEl.value = '';
         })
         .catch(function (e) { alert('添加节点失败: ' + e.message); });
@@ -587,24 +650,14 @@
   const btnCalc = document.getElementById('btn-calc');
   if (btnCalc) {
     btnCalc.addEventListener('click', function () {
-      btnCalc.disabled = true;
-      btnCalc.textContent = '计算中...';
-      fetch('/calculate', { method: 'POST' })
-        .then(function (res) {
-          if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
-          return res.json();
-        })
-        .then(function (data) {
-          shortestResults = buildResultsMap(data.results || []);
-          setPathResults('已计算完成：进入模式后点击起点/终点查看 top4');
-          setShortestModeStatus();
+      shortestResults = null;
+      ensureCalculated()
+        .then(function () {
+          setPathResults('已计算完成：选择起点/终点或进入模式后点击查看 top4');
+          maybeRenderSelectedPair();
         })
         .catch(function (e) {
           alert('计算失败: ' + e.message);
-        })
-        .finally(function () {
-          btnCalc.disabled = false;
-          btnCalc.textContent = '计算路径';
         });
     });
   }
@@ -627,6 +680,11 @@
       }
     });
   }
+
+  const selFrom = document.getElementById('shortest-from');
+  const selTo = document.getElementById('shortest-to');
+  if (selFrom) selFrom.addEventListener('change', maybeRenderSelectedPair);
+  if (selTo) selTo.addEventListener('change', maybeRenderSelectedPair);
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', loadAndRender);
