@@ -45,7 +45,7 @@
   function nodeIdOf(n) {
     if (typeof n === 'string') return n;
     if (n == null) return '';
-    return n.id != null ? n.id : n.ID;
+    return n.nodeId != null ? n.nodeId : n.nodeID || n.id || n.ID;
   }
 
   function nodePosOf(n) {
@@ -330,7 +330,7 @@
           fetch('/save-position', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: id, x: pos.x, y: pos.y }),
+            body: JSON.stringify({ nodeId: id, x: pos.x, y: pos.y }),
           }).catch((e) => console.error('save-position failed', e));
         });
 
@@ -487,7 +487,7 @@
     var typeVal = (node.type !== undefined && node.type !== null) ? node.type : ((node.Type !== undefined && node.Type !== null) ? node.Type : '');
     var statusVal = (node.status !== undefined && node.status !== null) ? node.status : ((node.Status !== undefined && node.Status !== null) ? node.Status : '');
     document.getElementById('detail-fields').innerHTML =
-      '<label>节点 ID</label><input type="text" id="detail-id" readonly value="' + escapeAttr(nodeId) + '">' +
+      '<label>节点 nodeId</label><input type="text" id="detail-nodeId" readonly value="' + escapeAttr(nodeId) + '">' +
       '<label>描述 (des)</label><input type="text" id="detail-des" value="' + escapeAttr(des) + '">' +
       '<label>类型 (type)</label><input type="number" id="detail-type" value="' + escapeAttr(typeVal) + '">' +
       '<label>状态 (status)</label><input type="number" id="detail-status" value="' + escapeAttr(statusVal) + '">';
@@ -537,12 +537,12 @@
   document.getElementById('detail-save').addEventListener('click', function () {
     if (!editContext) return;
     if (editContext.type === 'node') {
-      var id = document.getElementById('detail-id').value.trim();
+      var nodeId = document.getElementById('detail-nodeId').value.trim();
       var des = document.getElementById('detail-des').value;
       var typeNum = parseInt(document.getElementById('detail-type').value, 10);
       var statusNum = parseInt(document.getElementById('detail-status').value, 10);
-      if (id === '') { alert('节点 ID 不能为空'); return; }
-      var payload = { id: id, des: des };
+      if (nodeId === '') { alert('节点 nodeId 不能为空'); return; }
+      var payload = { nodeId: nodeId, des: des };
       if (!isNaN(typeNum)) payload.type = typeNum;
       if (!isNaN(statusNum)) payload.status = statusNum;
       fetch('/update-node', {
@@ -552,7 +552,7 @@
       })
         .then(function (res) {
           if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
-          var node = getNodeById(id);
+          var node = getNodeById(nodeId);
           if (node) { node.des = des; if (!isNaN(typeNum)) node.type = typeNum; if (!isNaN(statusNum)) node.status = statusNum; }
           document.getElementById('detail-overlay').classList.remove('show');
           editContext = null;
@@ -593,10 +593,10 @@
   const btnAddNode = document.getElementById('btn-add-node');
   if (btnAddNode) {
     btnAddNode.addEventListener('click', function () {
-      const idEl = document.getElementById('add-node-id');
-      const id = idEl ? idEl.value.trim() : '';
-      if (!id) { alert('节点 ID 不能为空'); return; }
-      if (getNodeById(id)) { alert('节点已存在: ' + id); return; }
+      const nodeIdEl = document.getElementById('add-node-nodeId');
+      const nodeIdVal = nodeIdEl ? nodeIdEl.value.trim() : '';
+      if (!nodeIdVal) { alert('节点 nodeId 不能为空'); return; }
+      if (getNodeById(nodeIdVal)) { alert('节点已存在: ' + nodeIdVal); return; }
 
       const des = (document.getElementById('add-node-des') || {}).value || '';
       const typeNum = parseInt((document.getElementById('add-node-type') || {}).value, 10);
@@ -608,7 +608,7 @@
         x = vp.x + (Math.random() - 0.5) * 120;
         y = vp.y + (Math.random() - 0.5) * 120;
       }
-      const payload = { id: id, x: x, y: y, des: des };
+      const payload = { nodeId: nodeIdVal, x: x, y: y, des: des };
       if (!isNaN(typeNum)) payload.type = typeNum;
       if (!isNaN(statusNum)) payload.status = statusNum;
 
@@ -619,10 +619,10 @@
       })
         .then(function (res) {
           if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
-          fullNodes.push({ id: id, x: x, y: y, des: des, type: payload.type, status: payload.status });
-          nodes.add({ id: id, label: id, x: x, y: y });
+          fullNodes.push({ nodeId: nodeIdVal, x: x, y: y, des: des, type: payload.type, status: payload.status });
+          nodes.add({ id: nodeIdVal, label: nodeIdVal, x: x, y: y });
           populateShortestSelects();
-          if (idEl) idEl.value = '';
+          if (nodeIdEl) nodeIdEl.value = '';
         })
         .catch(function (e) { alert('添加节点失败: ' + e.message); });
     });

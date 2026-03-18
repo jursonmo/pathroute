@@ -23,18 +23,18 @@ type Edge struct {
 
 // GraphJSON is the root structure for loading graph from JSON.
 // Nodes are always []string for the algorithm. NewFromJSON accepts files where
-// "nodes" is either ["A","B",...] or [{"id":"A","x":0,"y":0},...].
+// "nodes" is either ["A","B",...] or [{"nodeId":"A","x":0,"y":0},...].
 type GraphJSON struct {
 	Nodes []string `json:"nodes"`
 	Edges []Edge   `json:"edges"`
 }
 
-// nodeObject is used when parsing "nodes" as array of objects (id, optional x, y).
+// nodeObject is used when parsing "nodes" as array of objects (nodeId, optional x, y).
 type nodeObject struct {
-	ID  string  `json:"id"`
-	X   float64 `json:"x"`
-	Y   float64 `json:"y"`
-	Des string  `json:"des"` // description
+	NodeID string  `json:"nodeId"`
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Des    string  `json:"des"` // description
 }
 
 // rawGraphFile is used to parse the JSON file with flexible nodes format.
@@ -53,7 +53,7 @@ type Graph struct {
 
 // NewFromJSON loads a graph from a JSON file. Costs must be in [MinCost, MaxCost].
 // If nodes is empty, nodes are inferred from edges.
-// The "nodes" field may be either ["A","B",...] or [{"id":"A","x":0,"y":0},...]; x,y are ignored.
+// The "nodes" field may be either ["A","B",...] or [{"nodeId":"A","x":0,"y":0},...]; x,y are ignored.
 func NewFromJSON(path string) (*Graph, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -86,7 +86,7 @@ func parseNodeIDs(raw json.RawMessage) ([]string, error) {
 	}
 	ids = make([]string, 0, len(objs))
 	for _, o := range objs {
-		ids = append(ids, o.ID)
+		ids = append(ids, o.NodeID)
 	}
 	return ids, nil
 }

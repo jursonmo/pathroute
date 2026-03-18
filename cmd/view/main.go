@@ -46,21 +46,21 @@ func main() {
 		}{Results: res.Results})
 	})
 
-	// Add node: POST /add-node {id, x?, y?, des?, type?, status?}
+	// Add node: POST /add-node {nodeId, x?, y?, des?, type?, status?}
 	http.HandleFunc("/add-node", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		var body struct {
-			ID     string   `json:"id"`
+			NodeID string   `json:"nodeId"`
 			X      *float64 `json:"x"`
 			Y      *float64 `json:"y"`
 			Des    string   `json:"des"`
 			Type   *int     `json:"type"`
 			Status *int     `json:"status"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ID == "" {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.NodeID == "" {
 			http.Error(w, "invalid body", http.StatusBadRequest)
 			return
 		}
@@ -80,12 +80,12 @@ func main() {
 			if m == nil {
 				continue
 			}
-			if id, _ := m["id"].(string); id == body.ID {
+			if nodeId, _ := m["nodeId"].(string); nodeId == body.NodeID {
 				http.Error(w, "node already exists", http.StatusConflict)
 				return
 			}
 		}
-		newNode := map[string]interface{}{"id": body.ID}
+		newNode := map[string]interface{}{"nodeId": body.NodeID}
 		if body.X != nil {
 			newNode["x"] = *body.X
 		}
@@ -114,18 +114,18 @@ func main() {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	// Save node position: POST /save-position {id,x,y} (preserves other node fields)
+	// Save node position: POST /save-position {nodeId,x,y} (preserves other node fields)
 	http.HandleFunc("/save-position", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		var body struct {
-			ID string  `json:"id"`
-			X  float64 `json:"x"`
-			Y  float64 `json:"y"`
+			NodeID string  `json:"nodeId"`
+			X      float64 `json:"x"`
+			Y      float64 `json:"y"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ID == "" {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.NodeID == "" {
 			http.Error(w, "invalid body", http.StatusBadRequest)
 			return
 		}
@@ -146,7 +146,7 @@ func main() {
 			if m == nil {
 				continue
 			}
-			if id, _ := m["id"].(string); id == body.ID {
+			if nodeId, _ := m["nodeId"].(string); nodeId == body.NodeID {
 				m["x"] = body.X
 				m["y"] = body.Y
 				found = true
@@ -169,19 +169,19 @@ func main() {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	// Update node extra fields: POST /update-node {id, des?, type?, status?}
+	// Update node extra fields: POST /update-node {nodeId, des?, type?, status?}
 	http.HandleFunc("/update-node", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 		var body struct {
-			ID     string `json:"id"`
+			NodeID string `json:"nodeId"`
 			Des    string `json:"des"`
 			Type   *int   `json:"type"`
 			Status *int   `json:"status"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.ID == "" {
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.NodeID == "" {
 			http.Error(w, "invalid body", http.StatusBadRequest)
 			return
 		}
@@ -202,7 +202,7 @@ func main() {
 			if m == nil {
 				continue
 			}
-			if id, _ := m["id"].(string); id == body.ID {
+			if nodeId, _ := m["nodeId"].(string); nodeId == body.NodeID {
 				m["des"] = body.Des
 				if body.Type != nil {
 					m["type"] = *body.Type
@@ -350,15 +350,15 @@ func main() {
 			return
 		}
 
-		// validate nodes exist (best effort; if nodes stored as strings, treat them as ids too)
-		nodeExists := func(id string) bool {
+		// validate nodes exist (best effort; if nodes stored as strings, treat as nodeId)
+		nodeExists := func(nodeId string) bool {
 			nodes, _ := raw["nodes"].([]interface{})
 			for _, n := range nodes {
-				if s, ok := n.(string); ok && s == id {
+				if s, ok := n.(string); ok && s == nodeId {
 					return true
 				}
 				if m, ok := n.(map[string]interface{}); ok {
-					if nid, _ := m["id"].(string); nid == id {
+					if nid, _ := m["nodeId"].(string); nid == nodeId {
 						return true
 					}
 				}
@@ -418,4 +418,3 @@ func main() {
 	log.Println("simple viewer listening on :8080")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
-

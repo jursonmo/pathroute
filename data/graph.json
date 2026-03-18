@@ -77,12 +77,18 @@
       "des": "",
       "from": "G",
       "to": "F"
+    },
+    {
+      "cost": 20,
+      "des": "",
+      "from": "D",
+      "to": "B"
     }
   ],
   "nodes": [
     {
       "des": "A node",
-      "id": "A",
+      "nodeId": "A",
       "status": 3,
       "type": 3,
       "x": 309,
@@ -90,7 +96,7 @@
     },
     {
       "des": "B node",
-      "id": "B",
+      "nodeId": "B",
       "status": 1,
       "type": 1,
       "x": -19,
@@ -98,7 +104,7 @@
     },
     {
       "des": "C node",
-      "id": "C",
+      "nodeId": "C",
       "status": 1,
       "type": 1,
       "x": 117,
@@ -106,7 +112,7 @@
     },
     {
       "des": "D node",
-      "id": "D",
+      "nodeId": "D",
       "status": 1,
       "type": 1,
       "x": -342,
@@ -114,7 +120,7 @@
     },
     {
       "des": "E node",
-      "id": "E",
+      "nodeId": "E",
       "status": 1,
       "type": 1,
       "x": 7,
@@ -122,7 +128,7 @@
     },
     {
       "des": "F node",
-      "id": "F",
+      "nodeId": "F",
       "status": 1,
       "type": 1,
       "x": -74,
@@ -130,11 +136,11 @@
     },
     {
       "des": "node G",
-      "id": "G",
+      "nodeId": "G",
       "status": 1,
       "type": 1,
-      "x": 71,
-      "y": 353
+      "x": -3,
+      "y": 383
     }
   ]
 }
