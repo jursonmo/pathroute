@@ -1,42 +1,86 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/jursonmo/pathroute/floyd"
-	"github.com/jursonmo/pathroute/graph"
+	"github.com/jursonmo/pathroute/internal/viewdb"
 )
 
 //go:embed static/*
 var staticFS embed.FS
 
+func envBool(key string, def bool) bool {
+	raw := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	if raw == "" {
+		return def
+	}
+	switch raw {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return def
+	}
+}
+
 func main() {
-	// Serve raw graph.json at /graph
+	dsn := strings.TrimSpace(os.Getenv("MYSQL_DSN"))
+	if dsn == "" {
+		//create database pathroute;
+		dsn = "root:@tcp(127.0.0.1:3306)/pathroute?charset=utf8mb4&parseTime=True&loc=Local"
+	}
+	if dsn == "" {
+		log.Fatal("MYSQL_DSN is required, example: user:pass@tcp(127.0.0.1:3306)/pathroute?charset=utf8mb4&parseTime=True&loc=Local")
+	}
+	gdb, err := viewdb.OpenMySQL(dsn)
+	if err != nil {
+		log.Fatal("connect mysql: ", err)
+	}
+	st := viewdb.NewStore(gdb)
+
+	// Optional bootstrap: import from graph.json only when DB is empty.
+	if envBool("SEED_FROM_JSON", true) {
+		seedPath := strings.TrimSpace(os.Getenv("GRAPH_JSON_PATH"))
+		if seedPath == "" {
+			seedPath = "data/graph.json"
+		}
+		if err := st.SeedFromJSONIfEmpty(context.Background(), seedPath); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				log.Printf("seed skipped, file not found: %s", seedPath)
+			} else {
+				log.Fatal("seed from json: ", err)
+			}
+		}
+	}
+
 	http.HandleFunc("/graph", func(w http.ResponseWriter, r *http.Request) {
-		data, err := os.ReadFile("data/graph.json")
+		data, err := st.GetGraph(r.Context())
 		if err != nil {
-			http.Error(w, "cannot read data/graph.json: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "load graph: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write(data)
+		_ = json.NewEncoder(w).Encode(data)
 	})
 
-	// Calculate shortest paths: POST /calculate
-	// Returns all pairs results so frontend can pick any (from,to) quickly.
 	http.HandleFunc("/calculate", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		g, err := graph.NewFromJSON("data/graph.json")
+		g, err := st.BuildGraph(r.Context())
 		if err != nil {
-			http.Error(w, "load graph: "+err.Error(), http.StatusInternalServerError)
+			http.Error(w, "build graph: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		res := floyd.RunFloyd(g)
@@ -46,7 +90,6 @@ func main() {
 		}{Results: res.Results})
 	})
 
-	// Add node: POST /add-node {nodeId, x?, y?, des?, type?, status?}
 	http.HandleFunc("/add-node", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -64,57 +107,33 @@ func main() {
 			http.Error(w, "invalid body", http.StatusBadRequest)
 			return
 		}
-		data, err := os.ReadFile("data/graph.json")
-		if err != nil {
-			http.Error(w, "cannot read data/graph.json: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		var raw map[string]interface{}
-		if err := json.Unmarshal(data, &raw); err != nil {
-			http.Error(w, "cannot parse data/graph.json: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		nodes, _ := raw["nodes"].([]interface{})
-		for _, n := range nodes {
-			m, _ := n.(map[string]interface{})
-			if m == nil {
-				continue
-			}
-			if nodeId, _ := m["nodeId"].(string); nodeId == body.NodeID {
-				http.Error(w, "node already exists", http.StatusConflict)
-				return
-			}
-		}
-		newNode := map[string]interface{}{"nodeId": body.NodeID}
+		n := viewdb.NodeDTO{NodeID: body.NodeID, Des: body.Des}
 		if body.X != nil {
-			newNode["x"] = *body.X
+			n.X = *body.X
 		}
 		if body.Y != nil {
-			newNode["y"] = *body.Y
-		}
-		if body.Des != "" {
-			newNode["des"] = body.Des
+			n.Y = *body.Y
 		}
 		if body.Type != nil {
-			newNode["type"] = *body.Type
+			n.Type = *body.Type
 		}
 		if body.Status != nil {
-			newNode["status"] = *body.Status
+			n.Status = *body.Status
 		}
-		raw["nodes"] = append(nodes, newNode)
-		out, err := json.MarshalIndent(raw, "", "  ")
-		if err != nil {
-			http.Error(w, "cannot marshal: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if err := os.WriteFile("data/graph.json", out, 0644); err != nil {
-			http.Error(w, "cannot write data/graph.json: "+err.Error(), http.StatusInternalServerError)
+		if err := st.AddNode(r.Context(), n); err != nil {
+			switch {
+			case errors.Is(err, viewdb.ErrAlreadyExist):
+				http.Error(w, "node already exists", http.StatusConflict)
+			case errors.Is(err, viewdb.ErrInvalidInput):
+				http.Error(w, err.Error(), http.StatusBadRequest)
+			default:
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	// Save node position: POST /save-position {nodeId,x,y} (preserves other node fields)
 	http.HandleFunc("/save-position", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -129,47 +148,20 @@ func main() {
 			http.Error(w, "invalid body", http.StatusBadRequest)
 			return
 		}
-		data, err := os.ReadFile("data/graph.json")
-		if err != nil {
-			http.Error(w, "cannot read data/graph.json: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		var raw map[string]interface{}
-		if err := json.Unmarshal(data, &raw); err != nil {
-			http.Error(w, "cannot parse data/graph.json: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		nodes, _ := raw["nodes"].([]interface{})
-		found := false
-		for _, n := range nodes {
-			m, _ := n.(map[string]interface{})
-			if m == nil {
-				continue
+		if err := st.SavePosition(r.Context(), body.NodeID, body.X, body.Y); err != nil {
+			switch {
+			case errors.Is(err, viewdb.ErrNotFound):
+				http.Error(w, "node not found", http.StatusNotFound)
+			case errors.Is(err, viewdb.ErrInvalidInput):
+				http.Error(w, err.Error(), http.StatusBadRequest)
+			default:
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
-			if nodeId, _ := m["nodeId"].(string); nodeId == body.NodeID {
-				m["x"] = body.X
-				m["y"] = body.Y
-				found = true
-				break
-			}
-		}
-		if !found {
-			http.Error(w, "node not found", http.StatusNotFound)
-			return
-		}
-		out, err := json.MarshalIndent(raw, "", "  ")
-		if err != nil {
-			http.Error(w, "cannot marshal: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if err := os.WriteFile("data/graph.json", out, 0644); err != nil {
-			http.Error(w, "cannot write data/graph.json: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	// Update node extra fields: POST /update-node {nodeId, des?, type?, status?}
 	http.HandleFunc("/update-node", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -185,130 +177,20 @@ func main() {
 			http.Error(w, "invalid body", http.StatusBadRequest)
 			return
 		}
-		data, err := os.ReadFile("data/graph.json")
-		if err != nil {
-			http.Error(w, "cannot read data/graph.json: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		var raw map[string]interface{}
-		if err := json.Unmarshal(data, &raw); err != nil {
-			http.Error(w, "cannot parse data/graph.json: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		nodes, _ := raw["nodes"].([]interface{})
-		found := false
-		for _, n := range nodes {
-			m, _ := n.(map[string]interface{})
-			if m == nil {
-				continue
+		if err := st.UpdateNode(r.Context(), body.NodeID, body.Des, body.Type, body.Status); err != nil {
+			switch {
+			case errors.Is(err, viewdb.ErrNotFound):
+				http.Error(w, "node not found", http.StatusNotFound)
+			case errors.Is(err, viewdb.ErrInvalidInput):
+				http.Error(w, err.Error(), http.StatusBadRequest)
+			default:
+				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
-			if nodeId, _ := m["nodeId"].(string); nodeId == body.NodeID {
-				m["des"] = body.Des
-				if body.Type != nil {
-					m["type"] = *body.Type
-				}
-				if body.Status != nil {
-					m["status"] = *body.Status
-				}
-				found = true
-				break
-			}
-		}
-		if !found {
-			http.Error(w, "node not found", http.StatusNotFound)
-			return
-		}
-		out, err := json.MarshalIndent(raw, "", "  ")
-		if err != nil {
-			http.Error(w, "cannot marshal: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if err := os.WriteFile("data/graph.json", out, 0644); err != nil {
-			http.Error(w, "cannot write data/graph.json: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
 
-	// Update edge: POST /update-edge {from, to, cost, des?, type?, status?}
-	const minCost, maxCost = 1, 1000
-	http.HandleFunc("/update-edge", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		var body struct {
-			From   string `json:"from"`
-			To     string `json:"to"`
-			Cost   int    `json:"cost"`
-			Des    string `json:"des"`
-			Type   *int   `json:"type"`
-			Status *int   `json:"status"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			http.Error(w, "invalid body", http.StatusBadRequest)
-			return
-		}
-		if body.From == "" || body.To == "" {
-			http.Error(w, "from and to required", http.StatusBadRequest)
-			return
-		}
-		if body.Cost != 0 && (body.Cost < minCost || body.Cost > maxCost) {
-			http.Error(w, "cost must be 1-1000", http.StatusBadRequest)
-			return
-		}
-
-		data, err := os.ReadFile("data/graph.json")
-		if err != nil {
-			http.Error(w, "cannot read data/graph.json: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		var raw map[string]interface{}
-		if err := json.Unmarshal(data, &raw); err != nil {
-			http.Error(w, "cannot parse data/graph.json: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		edges, _ := raw["edges"].([]interface{})
-		found := false
-		for _, e := range edges {
-			m, _ := e.(map[string]interface{})
-			if m == nil {
-				continue
-			}
-			from, _ := m["from"].(string)
-			to, _ := m["to"].(string)
-			if from == body.From && to == body.To {
-				if body.Cost >= minCost && body.Cost <= maxCost {
-					m["cost"] = body.Cost
-				}
-				m["des"] = body.Des
-				if body.Type != nil {
-					m["type"] = *body.Type
-				}
-				if body.Status != nil {
-					m["status"] = *body.Status
-				}
-				found = true
-				break
-			}
-		}
-		if !found {
-			http.Error(w, "edge not found", http.StatusNotFound)
-			return
-		}
-		out, err := json.MarshalIndent(raw, "", "  ")
-		if err != nil {
-			http.Error(w, "cannot marshal: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if err := os.WriteFile("data/graph.json", out, 0644); err != nil {
-			http.Error(w, "cannot write data/graph.json: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	})
-
-	// Add edge: POST /add-edge {from, to, cost, des?, type?, status?}
 	http.HandleFunc("/add-edge", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -326,86 +208,55 @@ func main() {
 			http.Error(w, "invalid body", http.StatusBadRequest)
 			return
 		}
-		if body.From == "" || body.To == "" {
-			http.Error(w, "from and to required", http.StatusBadRequest)
-			return
-		}
-		if body.From == body.To {
-			http.Error(w, "from and to must differ", http.StatusBadRequest)
-			return
-		}
-		if body.Cost < minCost || body.Cost > maxCost {
-			http.Error(w, "cost must be 1-1000", http.StatusBadRequest)
-			return
-		}
-
-		data, err := os.ReadFile("data/graph.json")
-		if err != nil {
-			http.Error(w, "cannot read data/graph.json: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		var raw map[string]interface{}
-		if err := json.Unmarshal(data, &raw); err != nil {
-			http.Error(w, "cannot parse data/graph.json: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		// validate nodes exist (best effort; if nodes stored as strings, treat as nodeId)
-		nodeExists := func(nodeId string) bool {
-			nodes, _ := raw["nodes"].([]interface{})
-			for _, n := range nodes {
-				if s, ok := n.(string); ok && s == nodeId {
-					return true
-				}
-				if m, ok := n.(map[string]interface{}); ok {
-					if nid, _ := m["nodeId"].(string); nid == nodeId {
-						return true
-					}
-				}
-			}
-			return false
-		}
-		if !nodeExists(body.From) || !nodeExists(body.To) {
-			http.Error(w, "from/to node not found", http.StatusNotFound)
-			return
-		}
-
-		edges, _ := raw["edges"].([]interface{})
-		for _, e := range edges {
-			m, _ := e.(map[string]interface{})
-			if m == nil {
-				continue
-			}
-			from, _ := m["from"].(string)
-			to, _ := m["to"].(string)
-			if from == body.From && to == body.To {
-				http.Error(w, "edge already exists", http.StatusConflict)
-				return
-			}
-		}
-		newEdge := map[string]interface{}{
-			"from": body.From,
-			"to":   body.To,
-			"cost": body.Cost,
-		}
-		if body.Des != "" {
-			newEdge["des"] = body.Des
-		}
+		e := viewdb.EdgeDTO{From: body.From, To: body.To, Cost: body.Cost, Des: body.Des}
 		if body.Type != nil {
-			newEdge["type"] = *body.Type
+			e.Type = *body.Type
 		}
 		if body.Status != nil {
-			newEdge["status"] = *body.Status
+			e.Status = *body.Status
 		}
-		raw["edges"] = append(edges, newEdge)
-
-		out, err := json.MarshalIndent(raw, "", "  ")
-		if err != nil {
-			http.Error(w, "cannot marshal: "+err.Error(), http.StatusInternalServerError)
+		if err := st.AddEdge(r.Context(), e); err != nil {
+			switch {
+			case errors.Is(err, viewdb.ErrAlreadyExist):
+				http.Error(w, "edge already exists", http.StatusConflict)
+			case errors.Is(err, viewdb.ErrNotFound):
+				http.Error(w, "from/to node not found", http.StatusNotFound)
+			case errors.Is(err, viewdb.ErrInvalidInput):
+				http.Error(w, err.Error(), http.StatusBadRequest)
+			default:
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 			return
 		}
-		if err := os.WriteFile("data/graph.json", out, 0644); err != nil {
-			http.Error(w, "cannot write data/graph.json: "+err.Error(), http.StatusInternalServerError)
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	http.HandleFunc("/update-edge", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		var body struct {
+			From   string `json:"from"`
+			To     string `json:"to"`
+			Cost   int    `json:"cost"`
+			Des    string `json:"des"`
+			Type   *int   `json:"type"`
+			Status *int   `json:"status"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			http.Error(w, "invalid body", http.StatusBadRequest)
+			return
+		}
+		if err := st.UpdateEdge(r.Context(), body.From, body.To, body.Cost, body.Des, body.Type, body.Status); err != nil {
+			switch {
+			case errors.Is(err, viewdb.ErrNotFound):
+				http.Error(w, "edge not found", http.StatusNotFound)
+			case errors.Is(err, viewdb.ErrInvalidInput):
+				http.Error(w, err.Error(), http.StatusBadRequest)
+			default:
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 			return
 		}
 		w.WriteHeader(http.StatusNoContent)
