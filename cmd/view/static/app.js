@@ -173,14 +173,40 @@
     return m;
   }
 
-  function renderTop4(from, to, pr) {
-    if (!pr || !pr.paths || !pr.paths.length) {
-      setPathResults('<div>从 <b>' + escapeAttr(from) + '</b> 到 <b>' + escapeAttr(to) + '</b>：不可达</div>');
+  function routeTitle(stops) {
+    return (stops || []).map(function (id) { return escapeAttr(id); }).join(' → ');
+  }
+
+  function renderRoutePaths(stops, composed) {
+    if (!composed || !composed.reachable) {
+      const failed = composed && composed.failedSegment;
+      let html = '<div style="margin-bottom:8px;">路径：<b>' + routeTitle(stops) + '</b></div>';
+      if (failed) {
+        html += '<div style="color:#ffb3bf;margin-bottom:8px;">'
+          + '从 <b>' + escapeAttr(failed.from) + '</b> 到 <b>' + escapeAttr(failed.to) + '</b> 不可达，已停止继续计算。'
+          + '</div>';
+      }
+      const prefix = composed && composed.prefixPath ? composed.prefixPath : [];
+      if (prefix.length > 1) {
+        html += '<div style="font-size:12px;color:#aaa;margin-bottom:4px;">已可达路径，总费用: ' + escapeAttr(composed.prefixDistance) + '</div>';
+        html += '<div style="font-size:13px;">' + escapeAttr(prefix.join(' → ')) + '</div>';
+        highlightPath(prefix);
+      } else {
+        html += '<div>暂无可达路径</div>';
+        clearHighlights();
+      }
+      setPathResults(html);
+      return;
+    }
+
+    const list = (composed.paths || []).slice(0, 4);
+    if (!list.length) {
+      setPathResults('<div>路径：<b>' + routeTitle(stops) + '</b>：不可达</div>');
       clearHighlights();
       return;
     }
-    const list = pr.paths.slice(0, 4);
-    let html = '<div style="margin-bottom:8px;">从 <b>' + escapeAttr(from) + '</b> 到 <b>' + escapeAttr(to) + '</b></div>';
+
+    let html = '<div style="margin-bottom:8px;">路径：<b>' + routeTitle(stops) + '</b></div>';
     html += '<div style="display:flex;flex-direction:column;gap:6px;">';
     list.forEach(function (p, idx) {
       const text = (p.path || []).join(' → ');
@@ -250,23 +276,73 @@
     }
     setOptions(fromSel, prevFrom);
     setOptions(toSel, prevTo);
+    Array.from(document.querySelectorAll('.waypoint-select')).forEach(function (sel) {
+      setOptions(sel, sel.value);
+    });
   }
 
-  function maybeRenderSelectedPair() {
+  function selectedWaypoints() {
+    return Array.from(document.querySelectorAll('.waypoint-select')).map(function (sel) {
+      return sel.value;
+    }).filter(Boolean);
+  }
+
+  function selectedRouteStops() {
     const fromSel = document.getElementById('shortest-from');
     const toSel = document.getElementById('shortest-to');
-    if (!fromSel || !toSel) return;
+    if (!fromSel || !toSel) return [];
     const from = fromSel.value;
     const to = toSel.value;
-    if (!from || !to) return;
+    if (!from || !to) return [];
+    return [from].concat(selectedWaypoints(), [to]);
+  }
+
+  function maybeRenderSelectedRoute() {
+    const stops = selectedRouteStops();
+    if (stops.length < 2) return;
     ensureCalculated()
       .then(function () {
-        const pr = shortestResults.get(edgeId(from, to));
-        renderTop4(from, to, pr);
+        const composer = window.RouteComposer;
+        if (!composer || typeof composer.composeWaypointPaths !== 'function') {
+          throw new Error('RouteComposer 未加载');
+        }
+        renderRoutePaths(stops, composer.composeWaypointPaths(shortestResults, stops, 4));
       })
       .catch(function (e) {
         alert('计算失败: ' + e.message);
       });
+  }
+
+  function addWaypointSelect(value) {
+    const list = document.getElementById('waypoint-list');
+    if (!list) return;
+    const count = list.querySelectorAll('.waypoint-row').length;
+    if (count >= 3) {
+      alert('中途点最多 3 个');
+      return;
+    }
+    const row = document.createElement('div');
+    row.className = 'waypoint-row';
+
+    const sel = document.createElement('select');
+    sel.className = 'waypoint-select';
+    row.appendChild(sel);
+
+    const remove = document.createElement('button');
+    remove.className = 'btn btn-secondary btn-small';
+    remove.type = 'button';
+    remove.textContent = '删除';
+    row.appendChild(remove);
+
+    list.appendChild(row);
+    populateShortestSelects();
+    if (value) sel.value = value;
+
+    sel.addEventListener('change', maybeRenderSelectedRoute);
+    remove.addEventListener('click', function () {
+      row.remove();
+      maybeRenderSelectedRoute();
+    });
   }
 
   function loadAndRender() {
@@ -351,8 +427,11 @@
             const to = nid;
             shortestStart = null;
             setShortestModeStatus();
-            const pr = shortestResults.get(edgeId(from, to));
-            renderTop4(from, to, pr);
+            const fromSel = document.getElementById('shortest-from');
+            const toSel = document.getElementById('shortest-to');
+            if (fromSel) fromSel.value = from;
+            if (toSel) toSel.value = to;
+            maybeRenderSelectedRoute();
             return;
           }
 
@@ -653,8 +732,8 @@
       shortestResults = null;
       ensureCalculated()
         .then(function () {
-          setPathResults('已计算完成：选择起点/终点或进入模式后点击查看 top4');
-          maybeRenderSelectedPair();
+          setPathResults('已计算完成：选择起点、中途点、终点或进入模式后点击查看 top4');
+          maybeRenderSelectedRoute();
         })
         .catch(function (e) {
           alert('计算失败: ' + e.message);
@@ -681,10 +760,17 @@
     });
   }
 
+  const btnAddWaypoint = document.getElementById('btn-add-waypoint');
+  if (btnAddWaypoint) {
+    btnAddWaypoint.addEventListener('click', function () {
+      addWaypointSelect('');
+    });
+  }
+
   const selFrom = document.getElementById('shortest-from');
   const selTo = document.getElementById('shortest-to');
-  if (selFrom) selFrom.addEventListener('change', maybeRenderSelectedPair);
-  if (selTo) selTo.addEventListener('change', maybeRenderSelectedPair);
+  if (selFrom) selFrom.addEventListener('change', maybeRenderSelectedRoute);
+  if (selTo) selTo.addEventListener('change', maybeRenderSelectedRoute);
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', loadAndRender);
@@ -692,4 +778,3 @@
     loadAndRender();
   }
 })();
-

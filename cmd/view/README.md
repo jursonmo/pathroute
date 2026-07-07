@@ -20,3 +20,12 @@ go run ./cmd/view
 
 Open: `http://localhost:8080`
 
+## Shortest path with waypoints
+
+In the viewer, click `计算路径`, then choose a start node, up to three ordered
+waypoints, and an end node.
+
+- When all segments are reachable, the viewer shows the top 4 shortest combined
+  paths that pass through the selected waypoints in order.
+- When any segment is unreachable, the viewer stops at that segment and shows
+  only the reachable prefix path.
