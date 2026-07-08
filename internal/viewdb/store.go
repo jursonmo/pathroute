@@ -19,6 +19,11 @@ var (
 	ErrInvalidInput = errors.New("invalid input")
 )
 
+const (
+	nodeStatusUnavailable = 0
+	nodeStatusAvailable   = 1
+)
+
 type NodeDTO struct {
 	NodeID string  `json:"nodeId"`
 	X      float64 `json:"x"`
@@ -110,14 +115,33 @@ func (s *Store) BuildGraph(ctx context.Context) (*graph.Graph, error) {
 	if err != nil {
 		return nil, err
 	}
+	return graph.NewFromStruct(buildAvailableGraphJSON(gdto))
+}
+
+func isNodeAvailable(status int) bool {
+	return status == nodeStatusAvailable
+}
+
+func buildAvailableGraphJSON(gdto *GraphDTO) *graph.GraphJSON {
+	availableNodes := make(map[string]struct{}, len(gdto.Nodes))
 	gj := &graph.GraphJSON{
 		Nodes: make([]string, 0, len(gdto.Nodes)),
 		Edges: make([]graph.Edge, 0, len(gdto.Edges)),
 	}
 	for _, n := range gdto.Nodes {
+		if !isNodeAvailable(n.Status) {
+			continue
+		}
+		availableNodes[n.NodeID] = struct{}{}
 		gj.Nodes = append(gj.Nodes, n.NodeID)
 	}
 	for _, e := range gdto.Edges {
+		if _, ok := availableNodes[e.From]; !ok {
+			continue
+		}
+		if _, ok := availableNodes[e.To]; !ok {
+			continue
+		}
 		gj.Edges = append(gj.Edges, graph.Edge{
 			From:   e.From,
 			To:     e.To,
@@ -127,7 +151,7 @@ func (s *Store) BuildGraph(ctx context.Context) (*graph.Graph, error) {
 			Status: e.Status,
 		})
 	}
-	return graph.NewFromStruct(gj)
+	return gj
 }
 
 func (s *Store) AddNode(ctx context.Context, n NodeDTO) error {
@@ -340,4 +364,3 @@ func (s *Store) SeedFromJSONIfEmpty(ctx context.Context, path string) error {
 		return nil
 	})
 }
-

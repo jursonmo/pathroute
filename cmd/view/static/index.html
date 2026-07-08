@@ -60,12 +60,15 @@
             <input id="add-node-type" type="number" placeholder="可选" />
           </div>
           <div class="field">
-            <label>状态 (status)</label>
-            <input id="add-node-status" type="number" placeholder="可选" />
+            <label>是否可用</label>
+            <select id="add-node-status">
+              <option value="0" selected>不可用</option>
+              <option value="1">可用</option>
+            </select>
           </div>
         </div>
         <button class="btn btn-primary" id="btn-add-node" type="button">添加节点</button>
-        <div class="hint">新增节点会放在当前视图中心附近，可拖动后自动保存位置。</div>
+        <div class="hint">新增节点默认不可用，会放在当前视图中心附近，可拖动后自动保存位置。</div>
       </div>
 
       <div class="section">
@@ -134,6 +137,7 @@
     </div>
   </div>
   <script src="route.js"></script>
+  <script src="status.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -15,6 +15,14 @@
   let shortestStart = null;
   let shortestResults = null; // Map key "A->B" -> PairResult
 
+  const nodeStatus = window.NodeStatus || {
+    NODE_STATUS_UNAVAILABLE: 0,
+    NODE_STATUS_AVAILABLE: 1,
+    normalizeNodeStatus: function (value) { return Number(value) === 1 ? 1 : 0; },
+    isNodeAvailable: function (value) { return Number(value) === 1; },
+    nodeStatusLabel: function (value) { return Number(value) === 1 ? '可用' : '不可用'; },
+  };
+
   const options = {
     nodes: {
       shape: 'dot',
@@ -53,6 +61,26 @@
     const x = n.x != null ? n.x : n.X;
     const y = n.y != null ? n.y : n.Y;
     return { x, y };
+  }
+
+  function rawNodeStatusOf(n) {
+    if (typeof n !== 'object' || n == null) return nodeStatus.NODE_STATUS_UNAVAILABLE;
+    const status = n.status != null ? n.status : n.Status;
+    return nodeStatus.normalizeNodeStatus(status);
+  }
+
+  function isNodeAvailable(n) {
+    return nodeStatus.isNodeAvailable(rawNodeStatusOf(n));
+  }
+
+  function isNodeAvailableById(id) {
+    return isNodeAvailable(getNodeById(id));
+  }
+
+  function nodeStatusOptions(selected) {
+    const status = nodeStatus.normalizeNodeStatus(selected);
+    return '<option value="0"' + (status === nodeStatus.NODE_STATUS_UNAVAILABLE ? ' selected' : '') + '>不可用</option>'
+      + '<option value="1"' + (status === nodeStatus.NODE_STATUS_AVAILABLE ? ' selected' : '') + '>可用</option>';
   }
 
   function edgeFromToCost(e) {
@@ -126,13 +154,52 @@
   const DEFAULT_EDGE_COLOR = '#4a9eff';
   const DEFAULT_NODE_BG = '#0f3460';
   const DEFAULT_NODE_BORDER = '#e94560';
+  const UNAVAILABLE_NODE_BG = '#4b5563';
+  const UNAVAILABLE_NODE_BORDER = '#9ca3af';
   let highlightedNodeIDs = [];
   let highlightedEdgeIDs = [];
+
+  function nodeColorForStatus(status) {
+    if (nodeStatus.isNodeAvailable(status)) {
+      return { background: DEFAULT_NODE_BG, border: DEFAULT_NODE_BORDER };
+    }
+    return { background: UNAVAILABLE_NODE_BG, border: UNAVAILABLE_NODE_BORDER };
+  }
+
+  function nodeColorForId(id) {
+    const node = getNodeById(id);
+    return nodeColorForStatus(rawNodeStatusOf(node));
+  }
+
+  function nodeVisualData(n) {
+    const id = nodeIdOf(n);
+    const pos = nodePosOf(n);
+    const x = pos.x;
+    const y = pos.y;
+    const hasPos = x != null && y != null;
+    const status = rawNodeStatusOf(n);
+    const statusLabel = nodeStatus.nodeStatusLabel(status);
+    return {
+      id: id,
+      label: id + '\n' + statusLabel,
+      title: '状态：' + statusLabel,
+      x: hasPos ? x : undefined,
+      y: hasPos ? y : undefined,
+      color: nodeColorForStatus(status),
+    };
+  }
+
+  function routeEdgesForCalculation() {
+    return fullEdges.filter(function (e) {
+      const ftc = edgeFromToCost(e);
+      return isNodeAvailableById(ftc.from) && isNodeAvailableById(ftc.to);
+    });
+  }
 
   function clearHighlights() {
     if (highlightedNodeIDs.length) {
       nodes.update(highlightedNodeIDs.map(function (id) {
-        return { id: id, color: { background: DEFAULT_NODE_BG, border: DEFAULT_NODE_BORDER } };
+        return { id: id, color: nodeColorForId(id) };
       }));
     }
     if (highlightedEdgeIDs.length) {
@@ -273,7 +340,7 @@
     const prevFrom = fromSel.value;
     const prevTo = toSel.value;
 
-    const ids = fullNodes.map(function (n) { return nodeIdOf(n); }).filter(Boolean).sort();
+    const ids = fullNodes.filter(isNodeAvailable).map(function (n) { return nodeIdOf(n); }).filter(Boolean).sort();
 
     function setOptions(sel, keepVal) {
       sel.innerHTML = '<option value="">请选择</option>' + ids.map(function (id) {
@@ -307,13 +374,19 @@
   function maybeRenderSelectedRoute() {
     const stops = selectedRouteStops();
     if (stops.length < 2) return;
+    const unavailable = stops.find(function (id) { return !isNodeAvailableById(id); });
+    if (unavailable) {
+      clearHighlights();
+      setPathResults('<div>节点 <b>' + escapeAttr(unavailable) + '</b> 不可用，不能参与路径计算</div>');
+      return;
+    }
     ensureCalculated()
       .then(function () {
         const composer = window.RouteComposer;
         if (!composer || typeof composer.findOrderedSimplePaths !== 'function') {
           throw new Error('RouteComposer 未加载');
         }
-        renderRoutePaths(stops, composer.findOrderedSimplePaths(fullEdges, stops, 4));
+        renderRoutePaths(stops, composer.findOrderedSimplePaths(routeEdgesForCalculation(), stops, 4));
       })
       .catch(function (e) {
         alert('计算失败: ' + e.message);
@@ -364,12 +437,9 @@
         // 不使用 x,y，让 vis 自动排布，保证一定能看到
         function rand() { return (Math.random() - 0.5) * 400; }
         const vsNodes = nodeList.map((n) => {
-          const id = nodeIdOf(n);
-          const pos = nodePosOf(n);
-          const x = pos.x;
-          const y = pos.y;
-          const hasPos = x != null && y != null;
-          const node = { id, label: id, x: hasPos ? x : rand(), y: hasPos ? y : rand() };
+          const node = nodeVisualData(n);
+          if (node.x == null) node.x = rand();
+          if (node.y == null) node.y = rand();
           return node;
         });
         var edgeIds = {};
@@ -421,6 +491,10 @@
         network.on('click', function (params) {
           if (shortestMode && params.nodes.length === 1) {
             const nid = params.nodes[0];
+            if (!isNodeAvailableById(nid)) {
+              alert('该节点不可用，不能参与路径计算');
+              return;
+            }
             if (!shortestResults) {
               alert('请先点击“计算路径”');
               return;
@@ -571,12 +645,12 @@
     document.getElementById('detail-title').textContent = '节点详情';
     var des = val(node, 'des', '');
     var typeVal = (node.type !== undefined && node.type !== null) ? node.type : ((node.Type !== undefined && node.Type !== null) ? node.Type : '');
-    var statusVal = (node.status !== undefined && node.status !== null) ? node.status : ((node.Status !== undefined && node.Status !== null) ? node.Status : '');
+    var statusVal = rawNodeStatusOf(node);
     document.getElementById('detail-fields').innerHTML =
       '<label>节点 nodeId</label><input type="text" id="detail-nodeId" readonly value="' + escapeAttr(nodeId) + '">' +
       '<label>描述 (des)</label><input type="text" id="detail-des" value="' + escapeAttr(des) + '">' +
       '<label>类型 (type)</label><input type="number" id="detail-type" value="' + escapeAttr(typeVal) + '">' +
-      '<label>状态 (status)</label><input type="number" id="detail-status" value="' + escapeAttr(statusVal) + '">';
+      '<label>是否可用</label><select id="detail-status">' + nodeStatusOptions(statusVal) + '</select>';
     document.getElementById('detail-overlay').classList.add('show');
   }
   function escapeAttr(s) {
@@ -626,11 +700,10 @@
       var nodeId = document.getElementById('detail-nodeId').value.trim();
       var des = document.getElementById('detail-des').value;
       var typeNum = parseInt(document.getElementById('detail-type').value, 10);
-      var statusNum = parseInt(document.getElementById('detail-status').value, 10);
+      var statusNum = nodeStatus.normalizeNodeStatus(document.getElementById('detail-status').value);
       if (nodeId === '') { alert('节点 nodeId 不能为空'); return; }
-      var payload = { nodeId: nodeId, des: des };
+      var payload = { nodeId: nodeId, des: des, status: statusNum };
       if (!isNaN(typeNum)) payload.type = typeNum;
-      if (!isNaN(statusNum)) payload.status = statusNum;
       fetch('/update-node', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -639,7 +712,15 @@
         .then(function (res) {
           if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
           var node = getNodeById(nodeId);
-          if (node) { node.des = des; if (!isNaN(typeNum)) node.type = typeNum; if (!isNaN(statusNum)) node.status = statusNum; }
+          if (node) {
+            node.des = des;
+            if (!isNaN(typeNum)) node.type = typeNum;
+            node.status = statusNum;
+            nodes.update(nodeVisualData(node));
+            populateShortestSelects();
+            shortestResults = null;
+            clearHighlights();
+          }
           document.getElementById('detail-overlay').classList.remove('show');
           editContext = null;
         })
@@ -686,7 +767,7 @@
 
       const des = (document.getElementById('add-node-des') || {}).value || '';
       const typeNum = parseInt((document.getElementById('add-node-type') || {}).value, 10);
-      const statusNum = parseInt((document.getElementById('add-node-status') || {}).value, 10);
+      const statusNum = nodeStatus.normalizeNodeStatus((document.getElementById('add-node-status') || {}).value);
 
       let x = (Math.random() - 0.5) * 200, y = (Math.random() - 0.5) * 200;
       if (network && typeof network.getViewPosition === 'function') {
@@ -694,9 +775,8 @@
         x = vp.x + (Math.random() - 0.5) * 120;
         y = vp.y + (Math.random() - 0.5) * 120;
       }
-      const payload = { nodeId: nodeIdVal, x: x, y: y, des: des };
+      const payload = { nodeId: nodeIdVal, x: x, y: y, des: des, status: statusNum };
       if (!isNaN(typeNum)) payload.type = typeNum;
-      if (!isNaN(statusNum)) payload.status = statusNum;
 
       fetch('/add-node', {
         method: 'POST',
@@ -705,8 +785,9 @@
       })
         .then(function (res) {
           if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
-          fullNodes.push({ nodeId: nodeIdVal, x: x, y: y, des: des, type: payload.type, status: payload.status });
-          nodes.add({ id: nodeIdVal, label: nodeIdVal, x: x, y: y });
+          const newNode = { nodeId: nodeIdVal, x: x, y: y, des: des, type: payload.type, status: payload.status };
+          fullNodes.push(newNode);
+          nodes.add(nodeVisualData(newNode));
           populateShortestSelects();
           if (nodeIdEl) nodeIdEl.value = '';
         })
