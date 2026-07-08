@@ -83,9 +83,12 @@
     const hasPos = x != null && y != null;
     const status = rawNodeStatusOf(n);
     const statusLabel = nodeStatus.nodeStatusLabel(status);
+    const label = nodeStatus.isNodeAvailable(status)
+      ? escapeLabel(id)
+      : escapeLabel(id) + '\n<code>' + escapeLabel(statusLabel) + '</code>';
     return {
       id: id,
-      label: escapeLabel(id) + '\n<code>' + escapeLabel(statusLabel) + '</code>',
+      label: label,
       title: '状态：' + statusLabel,
       x: hasPos ? x : undefined,
       y: hasPos ? y : undefined,

@@ -13,10 +13,10 @@ test('unavailable node status label uses red status font', () => {
   assert.equal(node.font.mono.color, status.NODE_STATUS_UNAVAILABLE_LABEL_COLOR);
 });
 
-test('available node status label keeps the normal status font', () => {
+test('available node status label is omitted', () => {
   const node = visual.nodeVisualData({ nodeId: 'A', status: status.NODE_STATUS_AVAILABLE });
 
-  assert.equal(node.label, 'A\n<code>可用</code>');
+  assert.equal(node.label, 'A');
   assert.equal(node.font.multi, 'html');
   assert.equal(node.font.mono.color, status.NODE_STATUS_AVAILABLE_LABEL_COLOR);
 });
