@@ -22,6 +22,7 @@
     isNodeAvailable: function (value) { return Number(value) === 1; },
     nodeStatusLabel: function (value) { return Number(value) === 1 ? '可用' : '不可用'; },
   };
+  const nodeVisual = window.NodeVisual;
 
   const options = {
     nodes: {
@@ -54,13 +55,6 @@
     if (typeof n === 'string') return n;
     if (n == null) return '';
     return n.nodeId != null ? n.nodeId : n.nodeID || n.id || n.ID;
-  }
-
-  function nodePosOf(n) {
-    if (typeof n !== 'object' || n == null) return { x: undefined, y: undefined };
-    const x = n.x != null ? n.x : n.X;
-    const y = n.y != null ? n.y : n.Y;
-    return { x, y };
   }
 
   function rawNodeStatusOf(n) {
@@ -152,18 +146,11 @@
   }
 
   const DEFAULT_EDGE_COLOR = '#4a9eff';
-  const DEFAULT_NODE_BG = '#0f3460';
-  const DEFAULT_NODE_BORDER = '#e94560';
-  const UNAVAILABLE_NODE_BG = '#4b5563';
-  const UNAVAILABLE_NODE_BORDER = '#9ca3af';
   let highlightedNodeIDs = [];
   let highlightedEdgeIDs = [];
 
   function nodeColorForStatus(status) {
-    if (nodeStatus.isNodeAvailable(status)) {
-      return { background: DEFAULT_NODE_BG, border: DEFAULT_NODE_BORDER };
-    }
-    return { background: UNAVAILABLE_NODE_BG, border: UNAVAILABLE_NODE_BORDER };
+    return nodeVisual.nodeColorForStatus(status);
   }
 
   function nodeColorForId(id) {
@@ -172,21 +159,7 @@
   }
 
   function nodeVisualData(n) {
-    const id = nodeIdOf(n);
-    const pos = nodePosOf(n);
-    const x = pos.x;
-    const y = pos.y;
-    const hasPos = x != null && y != null;
-    const status = rawNodeStatusOf(n);
-    const statusLabel = nodeStatus.nodeStatusLabel(status);
-    return {
-      id: id,
-      label: id + '\n' + statusLabel,
-      title: '状态：' + statusLabel,
-      x: hasPos ? x : undefined,
-      y: hasPos ? y : undefined,
-      color: nodeColorForStatus(status),
-    };
+    return nodeVisual.nodeVisualData(n);
   }
 
   function routeEdgesForCalculation() {
