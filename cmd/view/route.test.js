@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { composeWaypointPaths } = require('./static/route.js');
+const { composeWaypointPaths, findOrderedSimplePaths } = require('./static/route.js');
 
 function result(from, to, paths) {
   return {
@@ -62,4 +62,47 @@ test('composeWaypointPaths stops at the first unreachable segment and returns re
   assert.deepEqual(got.prefixPath, ['A', 'B']);
   assert.equal(got.prefixDistance, 2);
   assert.deepEqual(got.failedSegment, { from: 'B', to: 'C', index: 1 });
+});
+
+test('findOrderedSimplePaths excludes paths that repeat nodes across waypoint segments', () => {
+  const edges = [
+    { from: 'A', to: 'X', cost: 1 },
+    { from: 'X', to: 'B', cost: 1 },
+    { from: 'B', to: 'X', cost: 1 },
+    { from: 'X', to: 'C', cost: 1 },
+    { from: 'A', to: 'B', cost: 3 },
+    { from: 'B', to: 'C', cost: 10 },
+  ];
+
+  const got = findOrderedSimplePaths(edges, ['A', 'B', 'C'], 4);
+
+  assert.equal(got.reachable, true);
+  assert.deepEqual(got.paths[0], { path: ['A', 'B', 'X', 'C'], distance: 5 });
+  for (const p of got.paths) {
+    assert.equal(new Set(p.path).size, p.path.length, 'path repeats a node: ' + p.path.join(' -> '));
+  }
+});
+
+test('findOrderedSimplePaths returns prefix when continuing would require a repeated node', () => {
+  const edges = [
+    { from: 'A', to: 'X', cost: 1 },
+    { from: 'X', to: 'B', cost: 1 },
+    { from: 'B', to: 'X', cost: 1 },
+    { from: 'X', to: 'C', cost: 1 },
+  ];
+
+  const got = findOrderedSimplePaths(edges, ['A', 'B', 'C'], 4);
+
+  assert.equal(got.reachable, false);
+  assert.deepEqual(got.prefixPath, ['A', 'X', 'B']);
+  assert.equal(got.prefixDistance, 2);
+  assert.deepEqual(got.failedSegment, { from: 'B', to: 'C', index: 1 });
+});
+
+test('findOrderedSimplePaths rejects repeated required stops', () => {
+  const got = findOrderedSimplePaths([], ['A', 'B', 'A'], 4);
+
+  assert.equal(got.reachable, false);
+  assert.equal(got.invalidReason, '起点/中途点/终点不能重复');
+  assert.deepEqual(got.paths, []);
 });

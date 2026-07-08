@@ -181,9 +181,16 @@
     if (!composed || !composed.reachable) {
       const failed = composed && composed.failedSegment;
       let html = '<div style="margin-bottom:8px;">路径：<b>' + routeTitle(stops) + '</b></div>';
+      if (composed && composed.invalidReason) {
+        html += '<div style="color:#ffb3bf;margin-bottom:8px;">' + escapeAttr(composed.invalidReason) + '</div>';
+        html += '<div>暂无可达路径</div>';
+        clearHighlights();
+        setPathResults(html);
+        return;
+      }
       if (failed) {
         html += '<div style="color:#ffb3bf;margin-bottom:8px;">'
-          + '从 <b>' + escapeAttr(failed.from) + '</b> 到 <b>' + escapeAttr(failed.to) + '</b> 不可达，已停止继续计算。'
+          + '从 <b>' + escapeAttr(failed.from) + '</b> 到 <b>' + escapeAttr(failed.to) + '</b> 在不重复节点约束下不可达，已停止继续计算。'
           + '</div>';
       }
       const prefix = composed && composed.prefixPath ? composed.prefixPath : [];
@@ -303,10 +310,10 @@
     ensureCalculated()
       .then(function () {
         const composer = window.RouteComposer;
-        if (!composer || typeof composer.composeWaypointPaths !== 'function') {
+        if (!composer || typeof composer.findOrderedSimplePaths !== 'function') {
           throw new Error('RouteComposer 未加载');
         }
-        renderRoutePaths(stops, composer.composeWaypointPaths(shortestResults, stops, 4));
+        renderRoutePaths(stops, composer.findOrderedSimplePaths(fullEdges, stops, 4));
       })
       .catch(function (e) {
         alert('计算失败: ' + e.message);

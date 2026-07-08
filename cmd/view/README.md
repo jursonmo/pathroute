@@ -27,5 +27,7 @@ waypoints, and an end node.
 
 - When all segments are reachable, the viewer shows the top 4 shortest combined
   paths that pass through the selected waypoints in order.
+- Returned paths never repeat a node. The start, waypoint, and end selections
+  also cannot contain duplicate node IDs.
 - When any segment is unreachable, the viewer stops at that segment and shows
-  only the reachable prefix path.
+  only the reachable prefix path under the no-repeated-node constraint.
