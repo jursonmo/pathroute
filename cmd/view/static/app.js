@@ -22,6 +22,7 @@
     isNodeAvailable: function (value) { return Number(value) === 1; },
     nodeStatusLabel: function (value) { return Number(value) === 1 ? '可用' : '不可用'; },
   };
+  const edgeStatus = window.EdgeStatus;
   const nodeVisual = window.NodeVisual;
 
   const options = {
@@ -35,7 +36,7 @@
     edges: {
       arrows: 'to',
       font: { size: 12, color: '#fff', align: 'middle' },
-      color: { color: '#4a9eff' },
+      color: { color: edgeStatus.EDGE_COLOR_AVAILABLE },
     },
     physics: { enabled: false },
     interaction: { dragNodes: true, dragView: true },
@@ -145,7 +146,6 @@
     el.innerHTML = html;
   }
 
-  const DEFAULT_EDGE_COLOR = '#4a9eff';
   let highlightedNodeIDs = [];
   let highlightedEdgeIDs = [];
 
@@ -165,7 +165,9 @@
   function routeEdgesForCalculation() {
     return fullEdges.filter(function (e) {
       const ftc = edgeFromToCost(e);
-      return isNodeAvailableById(ftc.from) && isNodeAvailableById(ftc.to);
+      return edgeStatus.isEdgeAvailable(edgeStatus.rawEdgeStatusOf(e))
+        && isNodeAvailableById(ftc.from)
+        && isNodeAvailableById(ftc.to);
     });
   }
 
@@ -181,7 +183,13 @@
         const parsed = parseEdgeId(id);
         let smooth = undefined;
         if (parsed) smooth = edgeSmoothFor(parsed.from, parsed.to);
-        return { id: id, color: { color: DEFAULT_EDGE_COLOR }, width: 1, smooth: smooth };
+        const edge = parsed ? getEdgeByFromTo(parsed.from, parsed.to) : null;
+        return {
+          id: id,
+          color: edgeStatus.normalEdgeVisual(edge).color,
+          width: 1,
+          smooth: smooth,
+        };
       }));
     }
     highlightedNodeIDs = [];
@@ -193,7 +201,7 @@
     if (!path || !path.length) return;
     highlightedNodeIDs = path.slice();
     nodes.update(path.map(function (id) {
-      return { id: id, color: { background: '#e94560', border: '#ffffff' } };
+      return edgeStatus.routeNodeHighlight(id);
     }));
     const eids = [];
     for (let i = 0; i + 1 < path.length; i++) {
@@ -201,7 +209,7 @@
     }
     highlightedEdgeIDs = eids;
     edges.update(eids.map(function (id) {
-      return { id: id, color: { color: '#e94560' }, width: 4 };
+      return edgeStatus.routeEdgeHighlight(id);
     }));
   }
 
@@ -430,7 +438,13 @@
           const id = edgeId(from, to);
           const revId = edgeId(to, from);
           const isBidi = edgeIds[revId];
-          const edge = { id, from, to, label: String(w) };
+          const edge = {
+            id,
+            from,
+            to,
+            label: String(w),
+            color: edgeStatus.normalEdgeVisual(e).color,
+          };
           if (isBidi) {
             edge.smooth = id < revId ? false : { type: 'curvedCW', roundness: 0.4 };
           }
@@ -509,10 +523,9 @@
             }
             const des = (document.getElementById('add-edge-des') || {}).value || '';
             const typeNum = parseInt((document.getElementById('add-edge-type') || {}).value, 10);
-            const statusNum = parseInt((document.getElementById('add-edge-status') || {}).value, 10);
-            const payload = { from: from, to: to, cost: cost, des: des };
+            const statusNum = edgeStatus.normalizeEdgeStatus((document.getElementById('add-edge-status') || {}).value);
+            const payload = { from: from, to: to, cost: cost, des: des, status: statusNum };
             if (!isNaN(typeNum)) payload.type = typeNum;
-            if (!isNaN(statusNum)) payload.status = statusNum;
             fetch('/add-edge', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -520,10 +533,20 @@
             })
               .then(function (res) {
                 if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
-                fullEdges.push({ from: from, to: to, cost: cost, des: des, type: payload.type, status: payload.status });
+                const newEdge = { from: from, to: to, cost: cost, des: des, type: payload.type, status: statusNum };
+                fullEdges.push(newEdge);
                 const id = edgeId(from, to);
-                edges.add({ id: id, from: from, to: to, label: String(cost), smooth: edgeSmoothFor(from, to) });
+                edges.add({
+                  id: id,
+                  from: from,
+                  to: to,
+                  label: String(cost),
+                  color: edgeStatus.normalEdgeVisual(newEdge).color,
+                  smooth: edgeSmoothFor(from, to),
+                });
                 updateBidiStylesForPair(from, to);
+                shortestResults = null;
+                clearHighlights();
                 addEdgeFrom = null;
                 setEdgeModeStatus();
               })
@@ -644,7 +667,7 @@
     var costVal = edge.cost != null ? edge.cost : edge.Cost;
     var des = val(edge, 'des', '');
     var typeVal = (edge.type !== undefined && edge.type !== null) ? edge.type : ((edge.Type !== undefined && edge.Type !== null) ? edge.Type : '');
-    var statusVal = (edge.status !== undefined && edge.status !== null) ? edge.status : ((edge.Status !== undefined && edge.Status !== null) ? edge.Status : '');
+    var statusVal = edgeStatus.rawEdgeStatusOf(edge);
     document.getElementById('detail-title').textContent = '边详情';
     document.getElementById('detail-fields').innerHTML =
       '<label>起点 (from)</label><input type="text" id="detail-from" readonly value="' + escapeAttr(from) + '">' +
@@ -652,7 +675,7 @@
       '<label>费用 (cost)</label><input type="number" id="detail-cost" min="1" max="1000" value="' + escapeAttr(costVal) + '">' +
       '<label>描述 (des)</label><input type="text" id="detail-des" value="' + escapeAttr(des) + '">' +
       '<label>类型 (type)</label><input type="number" id="detail-type" value="' + escapeAttr(typeVal) + '">' +
-      '<label>状态 (status)</label><input type="number" id="detail-status" value="' + escapeAttr(statusVal) + '">';
+      '<label>是否可用</label><select id="detail-status">' + edgeStatus.edgeStatusOptions(statusVal) + '</select>';
     document.getElementById('detail-overlay').classList.add('show');
   }
   // parseEdgeId is defined above
@@ -706,12 +729,11 @@
       var cost = parseInt(document.getElementById('detail-cost').value, 10);
       var des = document.getElementById('detail-des').value;
       var typeNum = parseInt(document.getElementById('detail-type').value, 10);
-      var statusNum = parseInt(document.getElementById('detail-status').value, 10);
+      var statusNum = edgeStatus.normalizeEdgeStatus(document.getElementById('detail-status').value);
       if (from === '' || to === '') { alert('起点和终点不能为空'); return; }
       if (isNaN(cost) || cost < 1 || cost > 1000) { alert('费用必须在 1-1000 之间'); return; }
-      var payload = { from: from, to: to, cost: cost, des: des };
+      var payload = { from: from, to: to, cost: cost, des: des, status: statusNum };
       if (!isNaN(typeNum)) payload.type = typeNum;
-      if (!isNaN(statusNum)) payload.status = statusNum;
       fetch('/update-edge', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -720,8 +742,19 @@
         .then(function (res) {
           if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
           var edge = getEdgeByFromTo(from, to);
-          if (edge) { edge.cost = cost; edge.des = des; if (!isNaN(typeNum)) edge.type = typeNum; if (!isNaN(statusNum)) edge.status = statusNum; }
-          edges.update({ id: from + '->' + to, label: String(cost) });
+          if (edge) {
+            edge.cost = cost;
+            edge.des = des;
+            if (!isNaN(typeNum)) edge.type = typeNum;
+            edge.status = statusNum;
+          }
+          shortestResults = null;
+          clearHighlights();
+          edges.update({
+            id: edgeId(from, to),
+            label: String(cost),
+            color: edgeStatus.normalEdgeVisual(edge).color,
+          });
           document.getElementById('detail-overlay').classList.remove('show');
           editContext = null;
         })

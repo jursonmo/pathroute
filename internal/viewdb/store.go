@@ -22,6 +22,8 @@ var (
 const (
 	nodeStatusUnavailable = 0
 	nodeStatusAvailable   = 1
+	edgeStatusUnavailable = 0
+	edgeStatusAvailable   = 1
 )
 
 type NodeDTO struct {
@@ -122,6 +124,10 @@ func isNodeAvailable(status int) bool {
 	return status == nodeStatusAvailable
 }
 
+func isEdgeAvailable(status int) bool {
+	return status == edgeStatusAvailable
+}
+
 func buildAvailableGraphJSON(gdto *GraphDTO) *graph.GraphJSON {
 	availableNodes := make(map[string]struct{}, len(gdto.Nodes))
 	gj := &graph.GraphJSON{
@@ -136,6 +142,9 @@ func buildAvailableGraphJSON(gdto *GraphDTO) *graph.GraphJSON {
 		gj.Nodes = append(gj.Nodes, n.NodeID)
 	}
 	for _, e := range gdto.Edges {
+		if !isEdgeAvailable(e.Status) {
+			continue
+		}
 		if _, ok := availableNodes[e.From]; !ok {
 			continue
 		}

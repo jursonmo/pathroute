@@ -1,10 +1,13 @@
 (function (root, factory) {
-  const api = factory();
+  const edgeStatus = (typeof module === 'object' && module.exports)
+    ? require('./edge_status.js')
+    : root.EdgeStatus;
+  const api = factory(edgeStatus);
   if (typeof module === 'object' && module.exports) {
     module.exports = api;
   }
   root.RouteComposer = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (edgeStatus) {
   function edgeId(from, to) {
     return from + '->' + to;
   }
@@ -95,6 +98,7 @@
   function buildAdjacency(edges) {
     const adj = {};
     (edges || []).forEach(function (edge) {
+      if (!edgeStatus || !edgeStatus.isEdgeAvailable(edgeStatus.rawEdgeStatusOf(edge))) return;
       const ftc = edgeFromToCost(edge);
       if (!ftc.from || !ftc.to || !(ftc.cost > 0)) return;
       if (!adj[ftc.from]) adj[ftc.from] = [];

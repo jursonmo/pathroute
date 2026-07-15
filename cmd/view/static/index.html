@@ -89,11 +89,14 @@
             <input id="add-edge-type" type="number" placeholder="可选" />
           </div>
           <div class="field">
-            <label>状态 (status)</label>
-            <input id="add-edge-status" type="number" placeholder="可选" />
+            <label>是否可用</label>
+            <select id="add-edge-status">
+              <option value="0" selected>不可用</option>
+              <option value="1">可用</option>
+            </select>
           </div>
         </div>
-        <div class="hint">开启模式后：先点击起点节点，再点击终点节点，即可创建有向边。</div>
+        <div class="hint">新增边默认不可用。开启模式后：先点击起点节点，再点击终点节点，即可创建有向边。</div>
       </div>
 
       <div class="section">
@@ -136,6 +139,7 @@
       </div>
     </div>
   </div>
+  <script src="edge_status.js"></script>
   <script src="route.js"></script>
   <script src="status.js"></script>
   <script src="node_visual.js"></script>

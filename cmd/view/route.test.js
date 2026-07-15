@@ -66,12 +66,12 @@ test('composeWaypointPaths stops at the first unreachable segment and returns re
 
 test('findOrderedSimplePaths excludes paths that repeat nodes across waypoint segments', () => {
   const edges = [
-    { from: 'A', to: 'X', cost: 1 },
-    { from: 'X', to: 'B', cost: 1 },
-    { from: 'B', to: 'X', cost: 1 },
-    { from: 'X', to: 'C', cost: 1 },
-    { from: 'A', to: 'B', cost: 3 },
-    { from: 'B', to: 'C', cost: 10 },
+    { from: 'A', to: 'X', cost: 1, status: 1 },
+    { from: 'X', to: 'B', cost: 1, status: 1 },
+    { from: 'B', to: 'X', cost: 1, status: 1 },
+    { from: 'X', to: 'C', cost: 1, status: 1 },
+    { from: 'A', to: 'B', cost: 3, status: 1 },
+    { from: 'B', to: 'C', cost: 10, status: 1 },
   ];
 
   const got = findOrderedSimplePaths(edges, ['A', 'B', 'C'], 4);
@@ -85,10 +85,10 @@ test('findOrderedSimplePaths excludes paths that repeat nodes across waypoint se
 
 test('findOrderedSimplePaths returns prefix when continuing would require a repeated node', () => {
   const edges = [
-    { from: 'A', to: 'X', cost: 1 },
-    { from: 'X', to: 'B', cost: 1 },
-    { from: 'B', to: 'X', cost: 1 },
-    { from: 'X', to: 'C', cost: 1 },
+    { from: 'A', to: 'X', cost: 1, status: 1 },
+    { from: 'X', to: 'B', cost: 1, status: 1 },
+    { from: 'B', to: 'X', cost: 1, status: 1 },
+    { from: 'X', to: 'C', cost: 1, status: 1 },
   ];
 
   const got = findOrderedSimplePaths(edges, ['A', 'B', 'C'], 4);
@@ -105,4 +105,17 @@ test('findOrderedSimplePaths rejects repeated required stops', () => {
   assert.equal(got.reachable, false);
   assert.equal(got.invalidReason, '起点/中途点/终点不能重复');
   assert.deepEqual(got.paths, []);
+});
+
+test('findOrderedSimplePaths excludes unavailable edges', () => {
+  const edges = [
+    { from: 'A', to: 'B', cost: 1, status: 0 },
+    { from: 'A', to: 'C', cost: 2, status: 1 },
+    { from: 'C', to: 'B', cost: 2, status: 1 },
+  ];
+
+  const got = findOrderedSimplePaths(edges, ['A', 'B'], 4);
+
+  assert.equal(got.reachable, true);
+  assert.deepEqual(got.paths[0], { path: ['A', 'C', 'B'], distance: 4 });
 });

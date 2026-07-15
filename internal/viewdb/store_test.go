@@ -22,6 +22,26 @@ func TestIsNodeAvailable(t *testing.T) {
 	}
 }
 
+func TestIsEdgeAvailable(t *testing.T) {
+	tests := []struct {
+		name     string
+		status   int
+		expected bool
+	}{
+		{name: "unavailable status", status: edgeStatusUnavailable, expected: false},
+		{name: "available status", status: edgeStatusAvailable, expected: true},
+		{name: "unknown status", status: 2, expected: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isEdgeAvailable(tt.status); got != tt.expected {
+				t.Fatalf("isEdgeAvailable(%d) = %v, want %v", tt.status, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestBuildAvailableGraphJSONExcludesUnavailableNodes(t *testing.T) {
 	gdto := &GraphDTO{
 		Nodes: []NodeDTO{
@@ -31,9 +51,9 @@ func TestBuildAvailableGraphJSONExcludesUnavailableNodes(t *testing.T) {
 			{NodeID: "D", Status: nodeStatusUnavailable},
 		},
 		Edges: []EdgeDTO{
-			{From: "A", To: "B", Cost: 1},
-			{From: "B", To: "C", Cost: 1},
-			{From: "C", To: "D", Cost: 5},
+			{From: "A", To: "B", Cost: 1, Status: edgeStatusAvailable},
+			{From: "B", To: "C", Cost: 1, Status: edgeStatusAvailable},
+			{From: "C", To: "D", Cost: 5, Status: edgeStatusAvailable},
 		},
 	}
 
@@ -49,6 +69,30 @@ func TestBuildAvailableGraphJSONExcludesUnavailableNodes(t *testing.T) {
 		t.Fatalf("expected only edge B->C, got %v", gj.Edges)
 	}
 	if gj.Edges[0].From != "B" || gj.Edges[0].To != "C" {
+		t.Fatalf("unexpected available edge: %+v", gj.Edges[0])
+	}
+}
+
+func TestBuildAvailableGraphJSONExcludesUnavailableEdges(t *testing.T) {
+	gdto := &GraphDTO{
+		Nodes: []NodeDTO{
+			{NodeID: "A", Status: nodeStatusAvailable},
+			{NodeID: "B", Status: nodeStatusAvailable},
+			{NodeID: "C", Status: nodeStatusAvailable},
+		},
+		Edges: []EdgeDTO{
+			{From: "A", To: "B", Cost: 1, Status: edgeStatusAvailable},
+			{From: "A", To: "C", Cost: 2, Status: edgeStatusUnavailable},
+			{From: "B", To: "C", Cost: 3, Status: 2},
+		},
+	}
+
+	gj := buildAvailableGraphJSON(gdto)
+
+	if len(gj.Edges) != 1 {
+		t.Fatalf("expected only available edge A->B, got %v", gj.Edges)
+	}
+	if gj.Edges[0].From != "A" || gj.Edges[0].To != "B" {
 		t.Fatalf("unexpected available edge: %+v", gj.Edges[0])
 	}
 }
