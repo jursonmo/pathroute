@@ -114,3 +114,65 @@ export PATHROUTE_E2E_CLICKHOUSE_ADDR='127.0.0.1:9000'
 export PATHROUTE_E2E_CLICKHOUSE_DATABASE='pathroute_e2e'
 go test -tags=integration ./node_metric -run TestPersistentPageToRouteEndToEnd -v
 ```
+
+你的机器是 Apple Silicon macOS，建议使用 ClickHouse 官方的 `clickhousectl` 安装。本项目需要运行 ClickHouse Server，不是临时的 `clickhouse-local`。
+
+```bash
+# 1. 安装 ClickHouse 管理工具
+curl https://clickhouse.com/cli | sh
+
+# 如果提示找不到 chctl
+export PATH="$HOME/.local/bin:$PATH"
+
+# 2. 安装稳定版 ClickHouse
+chctl local use stable
+
+# 3. 启动本地服务
+chctl local server start
+
+# 4. 查看端口
+chctl local server list
+```
+
+正常情况下 TCP 端口是 `9000`。默认有 `default` 数据库。
+```
+chctl local client --query \
+  "SELECT version(), currentDatabase()"
+26.6.2.73	default
+```
+可以创建项目数据库：
+
+```bash
+chctl local client --query \
+  "CREATE DATABASE IF NOT EXISTS pathroute"
+```
+
+验证连接：
+
+```bash
+chctl local client --query \
+  "SELECT version(), currentDatabase()"
+```
+
+启动当前项目：
+
+```bash
+export DYNAMIC_METRICS_ENABLED=true
+export CLICKHOUSE_ADDRS=127.0.0.1:9000
+#export CLICKHOUSE_DATABASE=pathroute
+export CLICKHOUSE_DATABASE=default
+export CLICKHOUSE_USERNAME=default
+export CLICKHOUSE_PASSWORD=
+
+go run ./cmd/view
+```
+
+如果 `chctl local server list` 显示的 TCP 端口不是 `9000`，把 `CLICKHOUSE_ADDRS` 改成实际端口。项目要求可参见 [cmd/view/README.md](/Users/will/Desktop/learnspace/golang/pathroute/cmd/view/README.md:13)。
+
+停止服务：
+
+```bash
+chctl local server stop
+```
+
+这是 ClickHouse 当前官方推荐的本地开发安装方式：[ClickHouse CLI 安装文档](https://clickhouse.com/docs/install/clickhousectl)。
