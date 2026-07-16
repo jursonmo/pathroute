@@ -1,6 +1,7 @@
 package viewdb
 
 import (
+	"errors"
 	"fmt"
 
 	"gorm.io/driver/mysql"
@@ -18,9 +19,15 @@ func OpenMySQL(dsn string) (*gorm.DB, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := gdb.AutoMigrate(&NodeModel{}, &EdgeModel{}); err != nil {
-		return nil, err
+	sqlDB, err := gdb.DB()
+	if err != nil {
+		return nil, fmt.Errorf("getting mysql connection pool: %w", err)
+	}
+	models := []any{&NodeModel{}, &EdgeModel{}}
+	models = append(models, MetricModels()...)
+	if err := gdb.AutoMigrate(models...); err != nil {
+		// 迁移失败时调用者拿不到 gdb，必须在此处关闭已经创建的连接池，避免启动重试泄漏资源。
+		return nil, errors.Join(err, sqlDB.Close())
 	}
 	return gdb, nil
 }
-

@@ -2,6 +2,7 @@ package viewdb
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/jursonmo/pathroute/graph"
+	nodemetric "github.com/jursonmo/pathroute/node_metric"
 )
 
 var (
@@ -36,25 +38,59 @@ type NodeDTO struct {
 }
 
 type EdgeDTO struct {
-	From   string `json:"from"`
-	To     string `json:"to"`
-	Cost   int    `json:"cost"`
-	Des    string `json:"des"`
-	Type   int    `json:"type"`
-	Status int    `json:"status"`
+	From          string `json:"from"`
+	To            string `json:"to"`
+	Cost          int    `json:"cost"`
+	StaticCost    int    `json:"static_cost"`
+	DynamicCost   *int   `json:"dynamic_cost,omitempty"`
+	CostRevision  uint64 `json:"cost_revision"`
+	CostDegraded  bool   `json:"cost_degraded"`
+	DegradeReason string `json:"degrade_reason,omitempty"`
+	CostSource    string `json:"cost_source"`
+	Des           string `json:"des"`
+	Type          int    `json:"type"`
+	Status        int    `json:"status"`
 }
 
 type GraphDTO struct {
-	Nodes []NodeDTO `json:"nodes"`
-	Edges []EdgeDTO `json:"edges"`
+	Nodes                 []NodeDTO `json:"nodes"`
+	Edges                 []EdgeDTO `json:"edges"`
+	CostRevision          uint64    `json:"cost_revision"`
+	DynamicMetricsEnabled bool      `json:"dynamic_metrics_enabled"`
 }
 
 type Store struct {
-	db *gorm.DB
+	db           *gorm.DB
+	dynamicCosts bool
 }
 
-func NewStore(db *gorm.DB) *Store {
-	return &Store{db: db}
+// StoreOption 配置拓扑仓储的构图行为。
+type StoreOption func(*Store)
+
+// WithDynamicCosts 控制构图使用动态快照还是静态 graph_edges.cost。
+func WithDynamicCosts(enabled bool) StoreOption {
+	return func(store *Store) {
+		store.dynamicCosts = enabled
+	}
+}
+
+func NewStore(db *gorm.DB, options ...StoreOption) *Store {
+	store := &Store{db: db}
+	for _, option := range options {
+		option(store)
+	}
+	return store
+}
+
+// EdgeExists 按起点和终点检查一条有向边，供所有指标来源共用同一信任边界。
+func (s *Store) EdgeExists(ctx context.Context, key nodemetric.EdgeKey) (bool, error) {
+	var count int64
+	if err := s.db.WithContext(ctxOrBG(ctx)).Model(&EdgeModel{}).
+		Where("from_node_id = ? AND to_node_id = ?", key.FromNodeID, key.ToNodeID).
+		Count(&count).Error; err != nil {
+		return false, fmt.Errorf("checking directed edge %s: %w", key.String(), err)
+	}
+	return count == 1, nil
 }
 
 func ctxOrBG(ctx context.Context) context.Context {
@@ -77,17 +113,78 @@ func isDuplicateErr(err error) bool {
 }
 
 func (s *Store) GetGraph(ctx context.Context) (*GraphDTO, error) {
-	var nodes []NodeModel
+	if s.dynamicCosts {
+		return s.getDynamicGraph(ctx)
+	}
+
+	nodes := []NodeModel{}
 	if err := s.db.WithContext(ctxOrBG(ctx)).Order("node_id asc").Find(&nodes).Error; err != nil {
 		return nil, err
 	}
-	var edges []EdgeModel
+	edges := []EdgeModel{}
 	if err := s.db.WithContext(ctxOrBG(ctx)).Order("from_node_id asc, to_node_id asc").Find(&edges).Error; err != nil {
 		return nil, err
 	}
+	return buildGraphDTO(nodes, edges, nil, false, 0), nil
+}
+
+func (s *Store) getDynamicGraph(ctx context.Context) (*GraphDTO, error) {
+	var result *GraphDTO
+	err := s.db.WithContext(ctxOrBG(ctx)).Transaction(func(tx *gorm.DB) error {
+		var publication EdgeCostPublicationModel
+		revision := uint64(0)
+		if err := tx.Order("revision DESC").First(&publication).Error; err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("loading graph cost revision: %w", err)
+			}
+		} else {
+			revision = publication.Revision
+		}
+
+		nodes := []NodeModel{}
+		if err := tx.Order("node_id asc").Find(&nodes).Error; err != nil {
+			return fmt.Errorf("loading graph nodes: %w", err)
+		}
+		edges := []EdgeModel{}
+		if err := tx.Order("from_node_id asc, to_node_id asc").Find(&edges).Error; err != nil {
+			return fmt.Errorf("loading graph edges: %w", err)
+		}
+		snapshots := []EdgeCostSnapshotModel{}
+		if revision > 0 {
+			if err := tx.Where("revision <= ?", revision).
+				Order("from_node_id asc, to_node_id asc").
+				Find(&snapshots).Error; err != nil {
+				return fmt.Errorf("loading graph cost snapshots: %w", err)
+			}
+		}
+		result = buildGraphDTO(nodes, edges, snapshots, true, revision)
+		return nil
+	}, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func buildGraphDTO(
+	nodes []NodeModel,
+	edges []EdgeModel,
+	snapshots []EdgeCostSnapshotModel,
+	dynamicCosts bool,
+	revision uint64,
+) *GraphDTO {
 	out := &GraphDTO{
-		Nodes: make([]NodeDTO, 0, len(nodes)),
-		Edges: make([]EdgeDTO, 0, len(edges)),
+		Nodes:                 make([]NodeDTO, 0, len(nodes)),
+		Edges:                 make([]EdgeDTO, 0, len(edges)),
+		CostRevision:          revision,
+		DynamicMetricsEnabled: dynamicCosts,
+	}
+	snapshotsByEdge := make(map[string]EdgeCostSnapshotModel, len(snapshots))
+	for _, snapshot := range snapshots {
+		if snapshot.Revision <= revision {
+			key := snapshot.FromNodeID + "->" + snapshot.ToNodeID
+			snapshotsByEdge[key] = snapshot
+		}
 	}
 	for _, n := range nodes {
 		out.Nodes = append(out.Nodes, NodeDTO{
@@ -100,23 +197,57 @@ func (s *Store) GetGraph(ctx context.Context) (*GraphDTO, error) {
 		})
 	}
 	for _, e := range edges {
-		out.Edges = append(out.Edges, EdgeDTO{
-			From:   e.FromNodeID,
-			To:     e.ToNodeID,
-			Cost:   e.Cost,
-			Des:    e.Des,
-			Type:   e.Type,
-			Status: e.Status,
-		})
+		edge := EdgeDTO{
+			From:         e.FromNodeID,
+			To:           e.ToNodeID,
+			Cost:         e.Cost,
+			StaticCost:   e.Cost,
+			CostRevision: revision,
+			CostSource:   "static",
+			Des:          e.Des,
+			Type:         e.Type,
+			Status:       e.Status,
+		}
+		if dynamicCosts {
+			edge.Cost = 1000
+			edge.CostSource = "dynamic_fallback"
+			edge.CostDegraded = true
+			edge.DegradeReason = "no_dynamic_snapshot"
+			key := e.FromNodeID + "->" + e.ToNodeID
+			if snapshot, exists := snapshotsByEdge[key]; exists {
+				dynamicCost := snapshot.Cost
+				edge.Cost = snapshot.Cost
+				edge.DynamicCost = &dynamicCost
+				edge.CostRevision = snapshot.Revision
+				edge.CostSource = "dynamic"
+				edge.CostDegraded = snapshot.Degraded
+				edge.DegradeReason = snapshot.DegradeReason
+			}
+		}
+		out.Edges = append(out.Edges, edge)
 	}
-	return out, nil
+	return out
 }
 
 func (s *Store) BuildGraph(ctx context.Context) (*graph.Graph, error) {
+	g, _, err := s.BuildGraphWithRevision(ctx)
+	return g, err
+}
+
+// BuildGraphWithRevision 构造路由图并返回本次一致性事务读取到的 cost revision。
+func (s *Store) BuildGraphWithRevision(ctx context.Context) (*graph.Graph, uint64, error) {
 	gdto, err := s.GetGraph(ctx)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
+	g, err := graphFromDTO(gdto)
+	if err != nil {
+		return nil, 0, err
+	}
+	return g, gdto.CostRevision, nil
+}
+
+func graphFromDTO(gdto *GraphDTO) (*graph.Graph, error) {
 	return graph.NewFromStruct(buildAvailableGraphJSON(gdto))
 }
 

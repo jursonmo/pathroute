@@ -14,6 +14,7 @@
   let shortestMode = false;
   let shortestStart = null;
   let shortestResults = null; // Map key "A->B" -> PairResult
+  let dynamicCosts = false;
 
   const nodeStatus = window.NodeStatus || {
     NODE_STATUS_UNAVAILABLE: 0,
@@ -24,6 +25,7 @@
   };
   const edgeStatus = window.EdgeStatus;
   const nodeVisual = window.NodeVisual;
+  const metricDashboard = window.MetricDashboard;
 
   const options = {
     nodes: {
@@ -84,6 +86,31 @@
     const cost = e.cost != null ? e.cost : e.Cost;
     return { from, to, cost };
   }
+
+  function edgeLabel(e) {
+    if (metricDashboard && typeof metricDashboard.edgeGraphLabel === 'function') {
+      return metricDashboard.edgeGraphLabel(e);
+    }
+    return String(edgeFromToCost(e).cost);
+  }
+
+  window.addEventListener('metric-costs-updated', function (event) {
+    if (!metricDashboard || typeof metricDashboard.applyCostSnapshotsToEdges !== 'function') return;
+    const changed = metricDashboard.applyCostSnapshotsToEdges(fullEdges, event.detail || {});
+    if (!changed.length) return;
+    const changedSet = new Set(changed);
+    fullEdges.forEach(function (edge) {
+      const ftc = edgeFromToCost(edge);
+      const id = edgeId(ftc.from, ftc.to);
+      if (changedSet.has(id) && edges.get(id)) {
+        edges.update({ id: id, label: edgeLabel(edge) });
+      }
+    });
+    // cost revision 已改变，清除基于旧权重的客户端缓存，避免继续展示旧路径高亮。
+    shortestResults = null;
+    clearHighlights();
+    setPathResults('动态 cost 已更新，请重新计算或查看最新路由 revision');
+  });
 
   function isBidi(from, to) {
     return fullEdges.some(function (e) {
@@ -414,6 +441,10 @@
         const edgeList = gj.edges || gj.Edges || [];
         fullNodes = nodeList;
         fullEdges = edgeList;
+        dynamicCosts = edgeList.some(function (edge) {
+          const source = edge.cost_source != null ? edge.cost_source : edge.CostSource;
+          return source && source !== 'static';
+        });
 
         // 不使用 x,y，让 vis 自动排布，保证一定能看到
         function rand() { return (Math.random() - 0.5) * 400; }
@@ -434,7 +465,6 @@
           const ftc = edgeFromToCost(e);
           const from = ftc.from;
           const to = ftc.to;
-          const w = ftc.cost;
           const id = edgeId(from, to);
           const revId = edgeId(to, from);
           const isBidi = edgeIds[revId];
@@ -442,7 +472,7 @@
             id,
             from,
             to,
-            label: String(w),
+            label: edgeLabel(e),
             color: edgeStatus.normalEdgeVisual(e).color,
           };
           if (isBidi) {
@@ -533,14 +563,24 @@
             })
               .then(function (res) {
                 if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
-                const newEdge = { from: from, to: to, cost: cost, des: des, type: payload.type, status: statusNum };
+                const newEdge = {
+                  from: from,
+                  to: to,
+                  cost: dynamicCosts ? 1000 : cost,
+                  static_cost: cost,
+                  cost_source: dynamicCosts ? 'dynamic_fallback' : 'static',
+                  cost_degraded: dynamicCosts,
+                  des: des,
+                  type: payload.type,
+                  status: statusNum,
+                };
                 fullEdges.push(newEdge);
                 const id = edgeId(from, to);
                 edges.add({
                   id: id,
                   from: from,
                   to: to,
-                  label: String(cost),
+                  label: edgeLabel(newEdge),
                   color: edgeStatus.normalEdgeVisual(newEdge).color,
                   smooth: edgeSmoothFor(from, to),
                 });
@@ -562,8 +602,13 @@
           edgeClickTimeout = setTimeout(function () {
             edgeClickTimeout = null;
             const from = parsed.from, to = parsed.to;
-            const edge = edges.get(id);
-            const cur = edge && edge.label != null ? String(edge.label) : '';
+            var eObj = fullEdges.find(function (e) {
+              var ftc = edgeFromToCost(e);
+              return ftc.from === from && ftc.to === to;
+            });
+            const cur = metricDashboard && typeof metricDashboard.edgeEditableCost === 'function'
+              ? metricDashboard.edgeEditableCost(eObj)
+              : edgeFromToCost(eObj || {}).cost;
             const input = prompt(from + ' → ' + to + ' 的费用 (1-1000):', cur);
             if (input === null) return;
             const cost = parseInt(input, 10);
@@ -571,11 +616,6 @@
               alert('费用必须在 1-1000 之间');
               return;
             }
-            var eObj = fullEdges.find(function (e) {
-              var ftc = edgeFromToCost(e);
-              var f = ftc.from, t = ftc.to;
-              return f === from && t === to;
-            });
             var payload = { from: from, to: to, cost: cost };
             if (eObj) { payload.des = eObj.des != null ? eObj.des : eObj.Des || ''; if (eObj.type !== undefined && eObj.type !== null) payload.type = eObj.type; else if (eObj.Type !== undefined && eObj.Type !== null) payload.type = eObj.Type; if (eObj.status !== undefined && eObj.status !== null) payload.status = eObj.status; else if (eObj.Status !== undefined && eObj.Status !== null) payload.status = eObj.Status; }
             fetch('/update-edge', {
@@ -585,13 +625,19 @@
             })
               .then(function (res) {
                 if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
-                edges.update({ id: id, label: String(cost) });
                 const eObj = fullEdges.find(function (e) {
                   var ftc = edgeFromToCost(e);
                   var f = ftc.from, t = ftc.to;
                   return f === from && t === to;
                 });
-                if (eObj) eObj.cost = cost;
+                if (eObj) {
+                  if (metricDashboard && typeof metricDashboard.applyEditedStaticCost === 'function') {
+                    metricDashboard.applyEditedStaticCost(eObj, cost);
+                  } else {
+                    eObj.cost = cost;
+                  }
+                  edges.update({ id: id, label: edgeLabel(eObj) });
+                }
               })
               .catch(function (e) { alert('更新失败: ' + e.message); });
           }, 250);
@@ -664,7 +710,9 @@
     var edge = getEdgeByFromTo(from, to);
     if (!edge) return;
     editContext = { type: 'edge', from: from, to: to };
-    var costVal = edge.cost != null ? edge.cost : edge.Cost;
+    var costVal = metricDashboard && typeof metricDashboard.edgeEditableCost === 'function'
+      ? metricDashboard.edgeEditableCost(edge)
+      : (edge.cost != null ? edge.cost : edge.Cost);
     var des = val(edge, 'des', '');
     var typeVal = (edge.type !== undefined && edge.type !== null) ? edge.type : ((edge.Type !== undefined && edge.Type !== null) ? edge.Type : '');
     var statusVal = edgeStatus.rawEdgeStatusOf(edge);
@@ -743,7 +791,11 @@
           if (!res.ok) return res.text().then(function (t) { throw new Error(t); });
           var edge = getEdgeByFromTo(from, to);
           if (edge) {
-            edge.cost = cost;
+            if (metricDashboard && typeof metricDashboard.applyEditedStaticCost === 'function') {
+              metricDashboard.applyEditedStaticCost(edge, cost);
+            } else {
+              edge.cost = cost;
+            }
             edge.des = des;
             if (!isNaN(typeNum)) edge.type = typeNum;
             edge.status = statusNum;
@@ -752,7 +804,7 @@
           clearHighlights();
           edges.update({
             id: edgeId(from, to),
-            label: String(cost),
+            label: edgeLabel(edge),
             color: edgeStatus.normalEdgeVisual(edge).color,
           });
           document.getElementById('detail-overlay').classList.remove('show');

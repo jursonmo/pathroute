@@ -8,7 +8,7 @@
   <style>
     body { margin: 0; font-family: system-ui, sans-serif; background: #1a1a2e; color: #eee; }
     #app { display: flex; height: 100vh; width: 100vw; }
-    #sidebar { width: 320px; background: #0f1224; border-right: 1px solid #0f3460; padding: 14px; box-sizing: border-box; overflow: auto; }
+    #sidebar { width: 420px; background: #0f1224; border-right: 1px solid #0f3460; padding: 14px; box-sizing: border-box; overflow: auto; }
     #graph { flex: 1; height: 100vh; background: #1a1a2e; }
     h2 { margin: 0 0 12px 0; font-size: 16px; color: #e94560; }
     .section { margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(15,52,96,0.6); }
@@ -37,6 +37,28 @@
     #detail-modal button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
     #detail-modal .btn-save { background: #e94560; color: #fff; }
     #detail-modal .btn-cancel { background: #0f3460; color: #eee; }
+    .metric-actions { display: flex; gap: 8px; margin-top: 10px; }
+    .metric-actions .btn { margin-top: 0; }
+    .metric-config { margin-top: 10px; padding: 9px; border: 1px solid rgba(15,52,96,0.8); border-radius: 6px; background: rgba(26,26,46,0.75); }
+    .metric-config-title { font-size: 12px; margin-bottom: 7px; }
+    .metric-config-title b { color: #e94560; }
+    .metric-grid { display: grid; grid-template-columns: 70px 1fr; gap: 5px 8px; align-items: center; font-size: 11px; color: #aaa; }
+    .metric-grid input { min-width: 0; width: 100%; box-sizing: border-box; padding: 5px; background: #101426; border: 1px solid #0f3460; color: #eee; border-radius: 3px; }
+    .metric-range { display: grid; grid-template-columns: 1fr 12px 1fr; gap: 4px; align-items: center; }
+    .metric-range i { text-align: center; font-style: normal; }
+    .metric-latest { margin-top: 6px; color: #777; font-size: 11px; }
+    .metric-error { color: #ffb3bf !important; border-color: rgba(233,69,96,0.7) !important; }
+    .metric-table { max-height: 220px; overflow: auto; line-height: 1.65; font-size: 11px; }
+    .metric-table-head { color: #e94560; position: sticky; top: 0; background: #16213e; }
+    .metric-cost { display: flex; flex-direction: column; gap: 3px; padding: 7px 0; border-bottom: 1px solid rgba(15,52,96,0.5); font-size: 11px; }
+    .metric-cost b { color: #4a9eff; }
+    .metric-cost small { color: #888; line-height: 1.4; }
+    .metric-unavailable b, .metric-unavailable span { color: #ff4d6d; }
+    @media (max-width: 800px) {
+      #app { flex-direction: column; height: auto; }
+      #sidebar { width: 100%; max-height: 55vh; }
+      #graph { min-height: 45vh; }
+    }
   </style>
 </head>
 <body>
@@ -126,6 +148,47 @@
         <div class="hint">先点“计算路径”，再选择起点、中途点、终点；也可以进入模式后在画布上点击起点和终点。</div>
         <div class="status" id="path-results">暂无结果</div>
       </div>
+
+      <div class="section" id="metric-dashboard">
+        <div style="font-size: 13px; color: #eee; margin-bottom: 6px;">动态边指标</div>
+        <div class="hint">配置由服务端保存并每 2 秒调度；关闭本页面不会停止已启用的模拟任务。</div>
+        <div class="metric-actions">
+          <button class="btn btn-secondary" id="btn-metric-config-reload" type="button">重新加载</button>
+          <button class="btn btn-primary" id="btn-metric-config-save" type="button">批量保存</button>
+        </div>
+        <div class="status" id="metric-config-status">正在加载动态指标配置…</div>
+        <div id="metric-simulation-list"></div>
+
+        <div style="font-size: 12px; color: #eee; margin-top: 14px;">指标历史</div>
+        <div class="row">
+          <div class="field">
+            <label>有向边</label>
+            <select id="metric-history-edge"></select>
+          </div>
+          <div class="field">
+            <label>协议</label>
+            <select id="metric-history-proto">
+              <option value="tcp">TCP</option>
+              <option value="udp">UDP</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label>开始时间</label>
+          <input id="metric-history-start" type="datetime-local" />
+        </div>
+        <div class="field">
+          <label>结束时间</label>
+          <input id="metric-history-end" type="datetime-local" />
+        </div>
+        <button class="btn btn-secondary" id="btn-metric-history" type="button">查询原始指标</button>
+        <div class="status" id="metric-history-results">请选择查询范围</div>
+
+        <div style="font-size: 12px; color: #eee; margin-top: 14px;">当前 cost 与路由</div>
+        <button class="btn btn-secondary" id="btn-metric-refresh" type="button">立即刷新</button>
+        <div class="status" id="metric-current-costs">正在加载当前 cost…</div>
+        <div class="status" id="metric-route-meta">正在加载最新路由 revision…</div>
+      </div>
     </div>
     <div id="graph"></div>
   </div>
@@ -143,6 +206,7 @@
   <script src="route.js"></script>
   <script src="status.js"></script>
   <script src="node_visual.js"></script>
+  <script src="metric.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
